@@ -37,7 +37,7 @@ export class AnnouncementProvider implements Provider {
         const tweets: Tweet[] = [];
 
         try {
-            for await (const tweet of scraper.getTweets(this.TWITTER_HANDLE , 10)) {
+            for await (const tweet of scraper.getTweets(this.TWITTER_HANDLE , 1)) {
                 tweets.push(tweet);
                 // Store tweet in embeddings for future referenc
             }

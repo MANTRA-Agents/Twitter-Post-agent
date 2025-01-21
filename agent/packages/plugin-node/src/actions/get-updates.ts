@@ -54,7 +54,7 @@ export const fetchMANTRAUpdates: Action = {
             const AnnouncementsObject = await generateObject({
                 runtime,
                 context: getMantraAnnouncementsContext,
-                modelClass: ModelClass.LARGE,
+                modelClass: ModelClass.SMALL,
                 schema: AnnouncementResultSchema,
                 stop: ["\n"],
             });
