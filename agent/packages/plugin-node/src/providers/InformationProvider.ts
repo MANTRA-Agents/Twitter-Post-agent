@@ -7,6 +7,7 @@ import {
 } from "@elizaos/core";
 import { Scraper, Tweet } from "agent-twitter-client";
 import { BrowserService } from "../services";
+import { generateEnhancedSummary } from "../services/browser";
 
 
 export class AnnouncementProvider implements Provider {
@@ -25,7 +26,13 @@ export class AnnouncementProvider implements Provider {
                 this.fetchWebsiteAnnouncements(runtime)
             ]);
 
-            return this.formatResponse(twitterData, websiteData);
+            const formattedSummary =  this.formatResponse(twitterData, websiteData);
+
+            const enhancedSummary = await generateEnhancedSummary(runtime, formattedSummary);
+
+            elizaLogger.log("announ it is ",{enhancedSummary}  )
+
+            return enhancedSummary.formattedAnnouncement;
         } catch (error) {
             elizaLogger.error("Error in AnnouncementProvider:", error);
             return "Failed to fetch announcements. Please try again later.";
@@ -37,7 +44,7 @@ export class AnnouncementProvider implements Provider {
         const tweets: Tweet[] = [];
 
         try {
-            for await (const tweet of scraper.getTweets(this.TWITTER_HANDLE , 1)) {
+            for await (const tweet of scraper.getTweets(this.TWITTER_HANDLE , 10)) {
                 tweets.push(tweet);
                 // Store tweet in embeddings for future referenc
             }
@@ -57,7 +64,7 @@ export class AnnouncementProvider implements Provider {
                 runtime
             );
 
-            // Store website content in embeddings
+            elizaLogger.log("Successfully fetched website content" , pageContent.bodyContent);
 
             return pageContent;
         } catch (error) {
@@ -75,10 +82,16 @@ export class AnnouncementProvider implements Provider {
             : "No recent tweets found.";
 
         const websiteSection = websiteContent.bodyContent
-            ? `\n\nWebsite Announcements:\nTitle: ${websiteContent.title}\n${websiteContent.description}\n\nDetails: ${websiteContent.bodyContent}`
+            ? ` ${websiteContent.bodyContent}`
             : "\n\nWebsite content unavailable.";
 
+
+
         return `${twitterSection}${websiteSection}`;
+
     }
+
+
+
 }
 

@@ -6,12 +6,9 @@ import {
     HandlerCallback,
     ActionExample,
     elizaLogger,
-    composeContext,
+
 } from "@elizaos/core";
-import { getMantraAnnouncementsTemplate } from "../templates";
-import { ModelClass } from "@elizaos/core";
-import { generateObject } from "@elizaos/core";
-import { AnnouncementResultSchema, isAnnouncementResult } from "../types";
+
 import { AnnouncementProvider } from "../providers/InformationProvider";
 
 export const fetchMANTRAUpdates: Action = {
@@ -46,27 +43,8 @@ export const fetchMANTRAUpdates: Action = {
         callback?: HandlerCallback
     ): Promise<boolean> => {
         try {
-            const getMantraAnnouncementsContext = composeContext({
-                state,
-                template: getMantraAnnouncementsTemplate,
-            });
-
-            const AnnouncementsObject = await generateObject({
-                runtime,
-                context: getMantraAnnouncementsContext,
-                modelClass: ModelClass.SMALL,
-                schema: AnnouncementResultSchema,
-                stop: ["\n"],
-            });
-
-            if (!isAnnouncementResult(AnnouncementsObject?.object)) {
-                elizaLogger.error("Failed to generate MANTRA Chain updates");
-                return false;
-            }
-
             const announcementProvider = new AnnouncementProvider();
             const announcements = await announcementProvider.get(runtime, message, state);
-
             if (!announcements) {
                 throw new Error("Failed to fetch MANTRA Chain updates");
             }

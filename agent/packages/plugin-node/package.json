@@ -75,7 +75,7 @@
         "wavefile": "11.0.0",
         "yargs": "17.7.2",
         "youtube-dl-exec": "3.0.10",
-        "@roamhq/wrtc": "^1.0.0"
+        "@roamhq/wrtc": "^0.8.0"
 
     },
     "devDependencies": {

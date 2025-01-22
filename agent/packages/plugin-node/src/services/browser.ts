@@ -9,6 +9,78 @@ import CaptchaSolver from "capsolver-npm";
 import { Browser, BrowserContext, chromium, Page } from "playwright";
 import { elizaLogger } from "@elizaos/core";
 
+interface AnnouncementSummary {
+    formattedAnnouncement: string;
+}
+
+export async function generateEnhancedSummary(
+    runtime: IAgentRuntime,
+    text: string
+): Promise<AnnouncementSummary> {
+    // Trim text to ensure it's within token limits
+    text = await trimTokens(text, 100000, runtime);
+
+    const prompt = `As an expert analyst, please provide a comprehensive analysis of the following text in an engaging announcement format. Consider industry trends, potential implications, and provide actionable insights.
+
+Text: """
+${text}
+"""
+
+Please structure your response in the following format:
+
+TITLE: Create an attention-grabbing, informative title
+
+HIGHLIGHT: Provide a concise, compelling announcement that captures the main message (2-3 sentences)
+
+KEY INSIGHTS:
+• List 3-4 key points with specific details
+• Each point should be clear and actionable
+• Focus on the most important findings
+
+EXPERT ANALYSIS:
+Provide a detailed analysis drawing from industry expertise and relevant context (2-3 paragraphs)
+
+IMPLICATIONS:
+Discuss potential impacts and consequences for stakeholders (1-2 paragraphs)
+
+RECOMMENDATIONS:
+Provide actionable suggestions and strategic recommendations based on the analysis (1 paragraph)
+
+Please ensure the analysis is:
+1. Clear and engaging for a general audience while maintaining expert-level insights
+2. Backed by context from the source material
+3. Forward-looking with practical implications
+4. Balanced in considering different perspectives
+5. Specific and actionable in recommendations`;
+
+    const response = await generateText({
+        runtime,
+        context: prompt,
+        modelClass: ModelClass.LARGE,
+    });
+
+    if (response) {
+        // Clean up any potential formatting issues
+        const cleanedResponse = response
+            .replace(/TITLE:/g, "🔔")
+            .replace(/HIGHLIGHT:/g, "📢")
+            .replace(/KEY INSIGHTS:/g, "KEY INSIGHTS:")
+            .replace(/EXPERT ANALYSIS:/g, "EXPERT ANALYSIS:")
+            .replace(/IMPLICATIONS:/g, "IMPLICATIONS:")
+            .replace(/RECOMMENDATIONS:/g, "RECOMMENDATIONS:");
+
+        return {
+            formattedAnnouncement: cleanedResponse
+        };
+    }
+
+    // Fallback with empty values if generation fails
+    return {
+        formattedAnnouncement: "Unable to generate announcement summary. Please try again."
+    };
+}
+
+
 async function generateSummary(
     runtime: IAgentRuntime,
     text: string
@@ -17,18 +89,17 @@ async function generateSummary(
     text = await trimTokens(text, 100000, runtime);
 
     const prompt = `Please generate a concise summary for the following text:
+    Text: """
+    ${text}
+    """
 
-  Text: """
-  ${text}
-  """
-
-  Respond with a JSON object in the following format:
-  \`\`\`json
-  {
-    "title": "Generated Title",
-    "summary": "Generated summary and/or description of the text"
-  }
-  \`\`\``;
+    Respond with a JSON object in the following format:
+    \`\`\`json
+    {
+        "title": "Generated Title",
+        "summary": "Generated summary and/or description of the text"
+    }
+    \`\`\``;
 
     const response = await generateText({
         runtime,

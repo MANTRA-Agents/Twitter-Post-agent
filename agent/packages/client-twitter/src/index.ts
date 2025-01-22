@@ -5,6 +5,8 @@ import { TwitterInteractionClient } from "./interactions.ts";
 import { TwitterPostClient } from "./post.ts";
 import { TwitterSearchClient } from "./search.ts";
 import { TwitterSpaceClient } from "./spaces.ts";
+import { AnnouncementsPlugin } from "./plugins/AnnouncementPlugin.ts";
+
 
 /**
  * A manager that orchestrates all specialized Twitter logic:
@@ -21,12 +23,15 @@ class TwitterManager {
     interaction: TwitterInteractionClient;
     space?: TwitterSpaceClient;
 
+
+
     constructor(runtime: IAgentRuntime, twitterConfig: TwitterConfig) {
         // Pass twitterConfig to the base client
         this.client = new ClientBase(runtime, twitterConfig);
 
+        const announcementPlugin = new AnnouncementsPlugin(runtime)
         // Posting logic
-        this.post = new TwitterPostClient(this.client, runtime);
+        this.post = new TwitterPostClient(this.client, runtime ,announcementPlugin);
 
         // Optional search logic (enabled if TWITTER_SEARCH_ENABLE is true)
         if (twitterConfig.TWITTER_SEARCH_ENABLE) {

@@ -15,7 +15,7 @@ typically the file location is in the form of a URL or a file path.
 `;
 
 export const getMantraAnnouncementsTemplate = `
-{{recentMessages}}
+{{formattedAnnouncements}}
 
 analyze the provided twitter posts and website announcements from Mantra Chain.
 create a concise and engaging summary of the recent announcements, focusing on key updates and developments.
@@ -24,14 +24,8 @@ maintain a professional but friendly tone like a giga chad .
 organize information chronologically with newest updates first.
 include technical details about network updates, partnerships, events, protocol changes, and token news.
 remove any duplicate announcements that appear on both platforms.
-end with a brief outlook on what to expect or watch for.
-
-\`\`\`json
-{
-    "summary": "summary text goes here"
-    announcements: ["announcement 1", "announcement 2", "announcement 3"]
-}
-\`\`\`
+end with a brief outlook on what to expect or watch for , give propee analysis of the insights and
+potential future announcements.
 `;
 
 

@@ -957,6 +957,9 @@ importers:
       '@elizaos/core':
         specifier: workspace:*
         version: link:../core
+      '@elizaos/plugin-node':
+        specifier: workspace:*
+        version: link:../plugin-node
       agent-twitter-client:
         specifier: 0.0.18
         version: 0.0.18(bufferutil@4.0.9)(utf-8-validate@6.0.5)
@@ -2163,6 +2166,9 @@ importers:
       '@opendocsg/pdf2md':
         specifier: 0.1.32
         version: 0.1.32(encoding@0.1.13)
+      '@roamhq/wrtc':
+        specifier: ^0.8.0
+        version: 0.8.0
       '@types/uuid':
         specifier: 10.0.0
         version: 10.0.0

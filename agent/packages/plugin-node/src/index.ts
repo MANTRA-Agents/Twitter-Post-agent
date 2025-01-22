@@ -4,8 +4,9 @@ import { Plugin } from "@elizaos/core";
 
 import { describeImage } from "./actions/describe-image.ts";
 import { fetchMANTRAUpdates } from "./actions/get-updates.ts";
-export * from "./actions/get-updates.ts";
 
+export * from "./actions/get-updates.ts";
+export * from "./providers/InformationProvider.ts"
 import {
     AwsS3Service,
     BrowserService,

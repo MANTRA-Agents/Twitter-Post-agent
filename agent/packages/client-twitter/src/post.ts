@@ -1,20 +1,20 @@
-import { Tweet } from "agent-twitter-client";
+import type { Tweet } from "agent-twitter-client";
 import {
     composeContext,
     generateText,
     getEmbeddingZeroVector,
-    IAgentRuntime,
+    type IAgentRuntime,
     ModelClass,
     stringToUuid,
-    TemplateType,
-    UUID,
+    type TemplateType,
+    type UUID,
     truncateToCompleteSentence,
 } from "@elizaos/core";
 import { elizaLogger } from "@elizaos/core";
-import { ClientBase } from "./base.ts";
+import type { ClientBase } from "./base.ts";
 import { postActionResponseFooter } from "@elizaos/core";
 import { generateTweetActions } from "@elizaos/core";
-import { IImageDescriptionService, ServiceType } from "@elizaos/core";
+import { type IImageDescriptionService, ServiceType } from "@elizaos/core";
 import { buildConversationThread } from "./utils.ts";
 import { twitterMessageHandlerTemplate } from "./interactions.ts";
 import { DEFAULT_MAX_TWEET_LENGTH } from "./environment.ts";
@@ -25,8 +25,9 @@ import {
     TextChannel,
     Partials,
 } from "discord.js";
-import { State } from "@elizaos/core";
-import { ActionResponse } from "@elizaos/core";
+import type { State } from "@elizaos/core";
+import type { ActionResponse } from "@elizaos/core";
+import { AnnouncementsPlugin } from "./plugins/AnnouncementPlugin.ts";
 
 const MAX_TIMELINES_TO_FETCH = 15;
 
@@ -38,6 +39,7 @@ const twitterPostTemplate = `
 {{bio}}
 {{lore}}
 {{topics}}
+{{announcements}}
 
 {{providers}}
 
@@ -45,10 +47,19 @@ const twitterPostTemplate = `
 
 {{postDirections}}
 
-# Task: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
-Write a post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
-Your response should be 1, 2, or 3 sentences (choose the length at random).
-Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than {{maxTweetLength}}. No emojis. Use \\n\\n (double spaces) between statements if there are multiple statements in your response.`;
+# Task: Generate a post in the voice, style, and perspective of {{agentName}} (@{{twitterUserName}}), ensuring it sounds like a genuine human voice (not robotic) and embodies a "giga chad" vibe.
+Write a post that is {{adjective}}, witty, and relevant about the {{announcements}} to know what's happening in the mantra chain, from the perspective of {{agentName}}.
+Your post MUST:
+- Use the phrase "JUST NOW" or "TRENDING" for posting about announcements.
+- Include emojis.
+- Be  2, or 3 sentences in total (choose the length randomly).
+- Contain no questions.
+- Remain under {{maxTweetLength}} characters.
+- Separate sentences with \\n\\n (double spaces) if there are multiple sentences.
+
+Do not add commentary or acknowledge these instructions, just write the post.
+`;
+
 
 export const twitterActionTemplate =
     `
@@ -93,21 +104,22 @@ export class TwitterPostClient {
     client: ClientBase;
     runtime: IAgentRuntime;
     twitterUsername: string;
-    private isProcessing: boolean = false;
-    private lastProcessTime: number = 0;
-    private stopProcessingActions: boolean = false;
+    announcementPlugin :AnnouncementsPlugin
+    private isProcessing = false;
+    private lastProcessTime = 0;
+    private stopProcessingActions = false;
     private isDryRun: boolean;
     private discordClientForApproval: Client;
-    private approvalRequired: boolean = false;
+    private approvalRequired = false;
     private discordApprovalChannelId: string;
     private approvalCheckInterval: number;
 
-    constructor(client: ClientBase, runtime: IAgentRuntime) {
+    constructor(client: ClientBase, runtime: IAgentRuntime , announcementPlugin:AnnouncementsPlugin) {
         this.client = client;
         this.runtime = runtime;
         this.twitterUsername = this.client.twitterConfig.TWITTER_USERNAME;
         this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
-
+        this.announcementPlugin = announcementPlugin
         // Log configuration on initialization
         elizaLogger.log("Twitter Client Configuration:");
         elizaLogger.log(`- Username: ${this.twitterUsername}`);
@@ -155,7 +167,7 @@ export class TwitterPostClient {
             );
 
             const APPROVAL_CHECK_INTERVAL =
-                parseInt(
+                Number.parseInt(
                     this.runtime.getSetting("TWITTER_APPROVAL_CHECK_INTERVAL")
                 ) || 5 * 60 * 1000; // 5 minutes
 
@@ -460,6 +472,8 @@ export class TwitterPostClient {
     async generateNewTweet() {
         elizaLogger.log("Generating new tweet");
 
+
+
         try {
             const roomId = stringToUuid(
                 "twitter_generate_room-" + this.client.profile.username
@@ -472,6 +486,9 @@ export class TwitterPostClient {
             );
 
             const topics = this.runtime.character.topics.join(", ");
+            const announcements = (await this.announcementPlugin.getAnnouncements()).join(",")
+
+            elizaLogger.log("announcements", {announcements})
 
             const state = await this.runtime.composeState(
                 {
@@ -479,7 +496,7 @@ export class TwitterPostClient {
                     roomId: roomId,
                     agentId: this.runtime.agentId,
                     content: {
-                        text: topics || "",
+                        text: announcements,
                         action: "TWEET",
                     },
                 },
@@ -647,7 +664,7 @@ export class TwitterPostClient {
     }
 
     // Helper method to ensure tweet length compliance
-    private trimTweetLength(text: string, maxLength: number = 280): string {
+    private trimTweetLength(text: string, maxLength = 280): string {
         if (text.length <= maxLength) return text;
 
         // Try to cut at last sentence
