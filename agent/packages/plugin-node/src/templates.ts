@@ -24,7 +24,7 @@ maintain a professional but friendly tone like a giga chad .
 organize information chronologically with newest updates first.
 include technical details about network updates, partnerships, events, protocol changes, and token news.
 remove any duplicate announcements that appear on both platforms.
-end with a brief outlook on what to expect or watch for , give propee analysis of the insights and
+end with a brief outlook on what to expect or watch for , give proper analysis of the insights and
 potential future announcements.
 `;
 

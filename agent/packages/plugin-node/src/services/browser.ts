@@ -9,75 +9,186 @@ import CaptchaSolver from "capsolver-npm";
 import { Browser, BrowserContext, chromium, Page } from "playwright";
 import { elizaLogger } from "@elizaos/core";
 
+import { z } from "zod";
+
+// Zod schema for each announcement item
+const AnnouncementItemSchema = z.object({
+  date: z.string().regex(
+    /^\d{4}-\d{2}-\d{2}$/,
+    "Date must be in YYYY-MM-DD format"
+  ),
+  text: z.string(),
+  source: z.string().optional(),
+});
+
+type AnnouncementItem = z.infer<typeof AnnouncementItemSchema>;
+
 interface AnnouncementSummary {
-    formattedAnnouncement: string;
+  formattedAnnouncement: string;
 }
 
+/**
+ * Generate a structured summary of the announcements, extracting each announcement
+ * in an array and validating them with zod.
+ */
 export async function generateEnhancedSummary(
-    runtime: IAgentRuntime,
-    text: string
+  runtime: IAgentRuntime,
+  text: string
 ): Promise<AnnouncementSummary> {
-    // Trim text to ensure it's within token limits
-    text = await trimTokens(text, 100000, runtime);
+  // Trim text to ensure it's within token limits
+  text = await trimTokens(text, 100000, runtime);
 
-    const prompt = `As an expert analyst, please provide a comprehensive analysis of the following text in an engaging announcement format. Consider industry trends, potential implications, and provide actionable insights.
+  const prompt = `As an expert data analyst, analyze the following tweet and webpage content, focusing ONLY on Mantra-related announcements and information. Extract and organize the information in a clean, structured format, including announcement dates.
 
-Text: """
+Text to analyze: """
 ${text}
 """
 
-Please structure your response in the following format:
+DATA CLEANING RULES:
+1. Focus only on official Mantra announcements and updates
+2. Remove all promotional and marketing fluff
+3. Exclude website utilities, footers, and navigation content
+4. Eliminate duplicate information
+5. Keep only factual, verifiable information
+6. Extract and standardize all dates in YYYY-MM-DD format
 
-TITLE: Create an attention-grabbing, informative title
+Please provide your analysis in this exact structure:
 
-HIGHLIGHT: Provide a concise, compelling announcement that captures the main message (2-3 sentences)
+DATES:
+[List all relevant dates found in the content]
+FORMAT: YYYY-MM-DD: [Event type]
 
-KEY INSIGHTS:
-• List 3-4 key points with specific details
-• Each point should be clear and actionable
-• Focus on the most important findings
+ANNOUNCEMENTS:
+[List only confirmed announcements with dates]
+FORMAT: YYYY-MM-DD: [Concise announcement] (Source: Tweet/Webpage)
 
-EXPERT ANALYSIS:
-Provide a detailed analysis drawing from industry expertise and relevant context (2-3 paragraphs)
+KEY_UPDATES:
+[List 3-4 major developments with dates]
+FORMAT:
+• YYYY-MM-DD: [Update title]
+- [Key point 1]
+- [Key point 2]
+- [Key point 3]
 
-IMPLICATIONS:
-Discuss potential impacts and consequences for stakeholders (1-2 paragraphs)
+ANALYSIS:
+[Core analysis points]
+FORMAT:
+• [Analysis area]
+- [Finding 1 with date if applicable]
+- [Finding 2 with date if applicable]
+- [Finding 3 with date if applicable]
 
-RECOMMENDATIONS:
-Provide actionable suggestions and strategic recommendations based on the analysis (1 paragraph)
+IMPACT:
+[Key implications]
+FORMAT:
+• [Impact area]
+- [Implication 1]
+- [Implication 2]
+- [Implication 3]
 
-Please ensure the analysis is:
-1. Clear and engaging for a general audience while maintaining expert-level insights
-2. Backed by context from the source material
-3. Forward-looking with practical implications
-4. Balanced in considering different perspectives
-5. Specific and actionable in recommendations`;
+NEXT_STEPS:
+[Actionable recommendations]
+FORMAT:
+• For [stakeholder group]:
+- [Action 1]
+- [Action 2]
+- [Action 3]
 
-    const response = await generateText({
-        runtime,
-        context: prompt,
-        modelClass: ModelClass.LARGE,
+Ensure all entries are:
+1. Fact-based and verified from source material
+2. Clear and concise
+3. Properly dated in YYYY-MM-DD format where applicable
+4. Properly attributed to source
+5. Free of speculative content
+`;
+
+  // Generate the LLM response
+  const response = await generateText({
+    runtime,
+    context: prompt,
+    modelClass: ModelClass.LARGE,
+  });
+
+  if (response) {
+    // Split the LLM's response by double newlines to identify major blocks
+    const blocks = response.split("\n\n");
+    const sections: Record<string, string> = {};
+
+    // In each block, use the first line as "header" and the rest as content
+    blocks.forEach((block) => {
+      const [header, ...contentLines] = block.split("\n");
+      const normalizedHeader = header.trim().toUpperCase().replace(/:$/, "");
+      const content = contentLines.join("\n").trim();
+      sections[normalizedHeader] = content;
     });
 
-    if (response) {
-        // Clean up any potential formatting issues
-        const cleanedResponse = response
-            .replace(/TITLE:/g, "🔔")
-            .replace(/HIGHLIGHT:/g, "📢")
-            .replace(/KEY INSIGHTS:/g, "KEY INSIGHTS:")
-            .replace(/EXPERT ANALYSIS:/g, "EXPERT ANALYSIS:")
-            .replace(/IMPLICATIONS:/g, "IMPLICATIONS:")
-            .replace(/RECOMMENDATIONS:/g, "RECOMMENDATIONS:");
+    // 1) Extract ANNOUNCEMENTS lines from the LLM's "ANNOUNCEMENTS" section
+    const announcementsRaw = sections["ANNOUNCEMENTS"] || "";
+    const announcementLines = announcementsRaw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => !!l);
 
-        return {
-            formattedAnnouncement: cleanedResponse
-        };
+    // 2) Parse each line into { date, text, source } with a simple regex
+    //    Expected format: "YYYY-MM-DD: Some text here (Source: Tweet/Webpage)"
+    const announcementsArray: any[] = [];
+
+    const announcementRegex =
+      /^(\d{4}-\d{2}-\d{2}):\s*(.+?)(?:\s*\(Source:\s*(.+)\))?$/i;
+
+    for (const line of announcementLines) {
+      const match = line.match(announcementRegex);
+      if (match) {
+        const [_, date, text, maybeSource] = match;
+        announcementsArray.push({
+          date,
+          text: text.trim(),
+          source: maybeSource?.trim(), // if it exists
+        });
+      }
     }
 
-    // Fallback with empty values if generation fails
-    return {
-        formattedAnnouncement: "Unable to generate announcement summary. Please try again."
+    // 3) Use zod to validate the array of announcements
+    let validatedAnnouncements: AnnouncementItem[] = [];
+    try {
+      validatedAnnouncements = z.array(AnnouncementItemSchema).parse(announcementsArray);
+    } catch (zodError) {
+      // If there's a parsing error, we can log or handle it
+      console.error("Zod parsing error for announcements:", zodError);
+      validatedAnnouncements = []; // fallback to empty if invalid
+    }
+
+    // 4) Build the final structured object
+    const structuredResponse = {
+      dates: sections["DATES"] || "",
+      announcements: validatedAnnouncements, // now an array of validated objects
+      keyUpdates: sections["KEY_UPDATES"] || "",
+      analysis: sections["ANALYSIS"] || "",
+      impact: sections["IMPACT"] || "",
+      nextSteps: sections["NEXT_STEPS"] || "",
     };
+
+    // Return as a JSON string
+    return {
+      formattedAnnouncement: JSON.stringify(structuredResponse, null, 2),
+    };
+  }
+
+  // Fallback if generation fails or response is empty
+  return {
+    formattedAnnouncement: JSON.stringify(
+      {
+        dates: "",
+        announcements: [],
+        keyUpdates: "",
+        analysis: "",
+        impact: "",
+        nextSteps: "",
+      },
+      null,
+      2
+    ),
+  };
 }
 
 
