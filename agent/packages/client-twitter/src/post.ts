@@ -30,7 +30,6 @@ import type { ActionResponse } from "@elizaos/core";
 
 // The AnnouncementsPlugin, which provides random unposted announcements
 import { AnnouncementsPlugin } from "./plugins/AnnouncementPlugin.ts";
-import { GiphyPlugin } from "./plugins/giphyPlugin.ts";
 
 
 const MAX_TIMELINES_TO_FETCH = 15;
@@ -146,7 +145,6 @@ export class TwitterPostClient {
 
   // The plugin that supplies random unposted announcements
   announcementPlugin: AnnouncementsPlugin;
-  GiphyPlugin: GiphyPlugin;
 
   private isProcessing = false;
   private lastProcessTime = 0;
@@ -168,14 +166,12 @@ export class TwitterPostClient {
     client: ClientBase,
     runtime: IAgentRuntime,
     announcementPlugin: AnnouncementsPlugin,
-    giphyPlugin : GiphyPlugin,
   ) {
     this.client = client;
     this.runtime = runtime;
     this.twitterUsername = this.client.twitterConfig.TWITTER_USERNAME;
     this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
     this.announcementPlugin = announcementPlugin;
-    this.GiphyPlugin = giphyPlugin;
 
     // We'll store the last announcement post time in the cache under this key
     this.LAST_ANNOUNCEMENT_KEY = `twitter/${this.twitterUsername}/lastAnnouncementPost`;

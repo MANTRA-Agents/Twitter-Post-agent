@@ -73,7 +73,8 @@ async function getCategories(runtime: IAgentRuntime): Promise<CategoryItem[]> {
 function formatCategoriesContext(categories: CategoryItem[]): string {
     const popularCategories = [
         'layer-1', 'defi', 'meme', 'ai-meme-coins',
-        'artificial-intelligence', 'gaming', 'metaverse'
+        'artificial-intelligence', 'gaming', 'metaverse',
+        'Real-World-Assets'
     ];
 
     const popular = categories

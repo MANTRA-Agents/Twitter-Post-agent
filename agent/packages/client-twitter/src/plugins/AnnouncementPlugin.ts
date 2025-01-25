@@ -1,4 +1,4 @@
-import { Plugin, elizaLogger, IAgentRuntime } from "@elizaos/core";
+import { Plugin, elizaLogger, IAgentRuntime, generateText, ModelClass } from "@elizaos/core";
 import { AnnouncementProvider } from "@elizaos/plugin-node";
 
 /**
@@ -21,6 +21,8 @@ interface AnnouncementsPluginConfig {
   minAnnouncementAge?: number;  // Minimum age of announcement to be eligible for posting (in hours)
   maxAnnouncementAge?: number;  // Maximum age of announcement to be eligible for posting (in days)
 }
+
+
 
 /**
  * Enhanced Plugin that manages announcements with tracking capabilities
@@ -221,8 +223,7 @@ export class AnnouncementsPlugin implements Plugin {
     const unposted = await this.getAllUnpostedAnnouncements();
 
     for (const announcement of unposted) {
-      // ... do your actual "post" logic here if needed
-      // e.g., post to Slack, Twitter, etc.
+
       await this.markAnnouncementAsPosted(announcement.id);
     }
   }
@@ -264,9 +265,59 @@ export class AnnouncementsPlugin implements Plugin {
             posted: false,
           };
         });
+
+
     } catch (error) {
       elizaLogger.error("[AnnouncementsPlugin] Error parsing announcements:", error);
       return [];
+    }
+  }
+
+
+  private createSummaryOfContent(content: string): Promise<string>{
+    try {
+      const sections = content.split("\n\n");
+      const annoucements =  sections
+        .filter((section) => section.trim())
+        .map((section) => {
+          const dateMatch = section.match(/(\d{4}-\d{2}-\d{2})/);
+          const date = dateMatch
+            ? dateMatch[1]
+            : new Date().toISOString().split("T")[0];
+
+          const source = section.toLowerCase().includes("twitter")
+            ? "twitter"
+            : "website";
+
+          return {
+            id: this.generateAnnouncementId(section),
+            content: section.trim(),
+            source,
+            date,
+            timestamp: new Date(date).getTime(),
+            title: this.extractTitle(section),
+            posted: false,
+          };
+        });
+
+     const prompt =    `
+     ${annoucements}
+    You are an experience crypto analyist and investor your task is to analyze all the incoming news
+    about Mantra chain provide a nice summary of the news and also provide a sentiment analysis of the news
+    provide your comments as an experienced crypto analyst.
+ `
+
+        const summary = generateText({
+            runtime : this.runtime,
+            context : prompt,
+            modelClass : ModelClass.MEDIUM
+
+        })
+
+        return summary;
+    } catch (error) {
+      elizaLogger.error("[AnnouncementsPlugin] Error parsing announcements:", error);
+
     }
   }
 

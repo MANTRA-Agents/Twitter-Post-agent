@@ -2,6 +2,7 @@ import { IAgentRuntime, Memory, Provider, State, elizaLogger } from "@elizaos/co
 import axios from 'axios';
 import { getApiConfig, validateCoingeckoConfig } from '../environment';
 
+
 interface CoinItem {
     id: string;
     symbol: string;
@@ -77,7 +78,7 @@ async function getCoins(runtime: IAgentRuntime, includePlatform: boolean = false
 function formatCoinsContext(coins: CoinItem[]): string {
     const popularCoins = [
         'bitcoin', 'ethereum', 'binancecoin', 'ripple',
-        'cardano', 'solana', 'polkadot', 'dogecoin'
+        'cardano', 'solana', 'polkadot', 'dogecoin',"mantra",
     ];
 
     const popular = coins
