@@ -1,6 +1,6 @@
 *.ts
 !index.ts
-!defaultCharacter.ts
+!mainCharacter.ts
 .env
 *.env
 .env*
