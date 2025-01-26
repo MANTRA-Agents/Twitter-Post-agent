@@ -1,5 +1,5 @@
 import { Character, ModelProviderName } from "./types.ts";
-export const defaultCharacer: Character = {
+export const defaultCharacter: Character = {
     name: "Eliza",
     username: "eliza",
     plugins: [],
