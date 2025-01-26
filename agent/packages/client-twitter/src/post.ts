@@ -31,12 +31,120 @@ import type { ActionResponse } from "@elizaos/core";
 // The AnnouncementsPlugin, which provides random unposted announcements
 import { AnnouncementsPlugin } from "./plugins/AnnouncementPlugin.ts";
 
+// ------------------------------------------------------------------
+// CoinMarketCap imports + TypeScript interfaces
+// ------------------------------------------------------------------
+import axios from "axios";
+
+interface PriceData {
+  price: number;            
+  marketCap: number;        
+  volume24h: number;        
+  percentChange24h: number; 
+}
+
+interface ApiStatus {
+  timestamp: string;
+  error_code: number;
+  error_message: string;
+  elapsed: number;
+  credit_count: number;
+}
+
+interface CryptoQuote {
+  [key: string]: {
+    price: number;
+    volume_24h: number;
+    percent_change_24h: number;
+    market_cap: number;
+  };
+}
+
+interface CryptoData {
+  id: number;
+  name: string;
+  symbol: string;
+  quote: CryptoQuote;
+}
+
+interface ApiData {
+  [symbol: string]: CryptoData;
+}
+
+interface ApiResponse {
+  status: ApiStatus;
+  data: ApiData;
+}
+
+const CMC_BASE_URL = "https://pro-api.coinmarketcap.com/v1";
+
+/**
+ * Fix: explicitly define local variables (price, marketCap, etc.)
+ * before returning them in the object.
+ */
+const createPriceService = (apiKey: string) => {
+  const client = axios.create({
+    baseURL: CMC_BASE_URL,
+    headers: {
+      "X-CMC_PRO_API_KEY": apiKey,
+      Accept: "application/json",
+    },
+  });
+
+  const getPrice = async (symbol: string, currency: string): Promise<PriceData> => {
+    const normalizedSymbol = symbol.toUpperCase().trim();
+    const normalizedCurrency = currency.toUpperCase().trim();
+
+    try {
+      const response = await client.get<ApiResponse>(
+        "/cryptocurrency/quotes/latest",
+        {
+          params: {
+            symbol: normalizedSymbol,
+            convert: normalizedCurrency,
+          },
+        }
+      );
+
+      console.log("CoinMarketCap API Response:", JSON.stringify(response.data, null, 2));
+
+      const symbolData = response.data.data[normalizedSymbol];
+      if (!symbolData) {
+        throw new Error(`No data found for symbol: ${normalizedSymbol}`);
+      }
+
+      const quoteData = symbolData.quote[normalizedCurrency];
+      if (!quoteData) {
+        throw new Error(`No quote data found for currency: ${normalizedCurrency}`);
+      }
+
+      // Explicitly define variables
+      const price = quoteData.price;
+      const marketCap = quoteData.market_cap;
+      const volume24h = quoteData.volume_24h;
+      const percentChange24h = quoteData.percent_change_24h;
+
+      return { price, marketCap, volume24h, percentChange24h };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const errorMessage =
+          error.response?.data?.status?.error_message || error.message;
+        console.error("CoinMarketCap API Error:", errorMessage);
+        throw new Error(`API Error: ${errorMessage}`);
+      }
+      throw error;
+    }
+  };
+
+  return { getPrice };
+};
+
+// ------------------------------------------------------------------
+// Templates
+// ------------------------------------------------------------------
 
 const MAX_TIMELINES_TO_FETCH = 15;
 
-/**
- * Template used for posting announcement tweets
- */
 const AnnouncementPostTemplate = `
 # Areas of Expertise
 {{knowledge}}
@@ -68,9 +176,6 @@ Your post MUST:
 Do not add commentary or acknowledge these instructions, just write the post.
 `;
 
-/**
- * Template used for posting regular tweets (non-announcements)
- */
 const RegularPostTemplate = `
 # Character Info
 {{knowledge}}
@@ -91,9 +196,6 @@ Write a short, fun tweet from the perspective of {{agentName}} (@{{twitterUserNa
 Just output the tweet text (no extra commentary).
 `;
 
-/**
- * The action template used when deciding to like/retweet/quote/reply.
- */
 export const twitterActionTemplate = `
 # INSTRUCTIONS: Determine actions for {{agentName}} (@{{twitterUserName}}) based on:
 {{bio}}
@@ -121,6 +223,41 @@ Tweet:
 # Respond with qualifying action tags only. Default to NO action unless extremely confident of relevance.
 ` + postActionResponseFooter;
 
+// New Token Update Template
+const TokenUpdatePostTemplate = `
+# Character Info
+{{knowledge}}
+{{bio}}
+{{lore}}
+{{topics}}
+{{price}}
+{{percentChange24h}}
+{{marketCap}}
+{{volume24h}}
+{{providers}}
+
+# Task
+Write a short, vibrant tweet from the perspective of {{agentName}} (@{{twitterUserName}}) about the current OM token price.
+You have the following data about OM in {{currency}}:
+
+The tweet should:
+- Summarize the current OM price
+- Possibly reference the 24-hour change, volume, and market cap
+- Sound enthusiastic and knowledgeable
+- Remain under {{maxTweetLength}} characters
+- Contain 1 or 2 emojis
+- Not ask any direct question
+- Encourage sharing or liking (CTA)
+- No disclaimers like "not financial advice"
+- No references to these instructions or meta commentary
+
+Just output the tweet text (no extra commentary).
+`;
+
+// ------------------------------------------------------------------
+// Implementation
+// ------------------------------------------------------------------
+
 interface PendingTweet {
   cleanedContent: string;
   roomId: UUID;
@@ -132,18 +269,10 @@ interface PendingTweet {
 
 type PendingTweetApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 
-/**
- * Main TwitterPostClient, which:
- * 1. Posts an announcement tweet every 2 hours (via announcementPlugin).
- * 2. Uses a new template for regular tweets.
- * 3. Switches logic in the main loop to pick announcement or regular tweet.
- */
 export class TwitterPostClient {
   client: ClientBase;
   runtime: IAgentRuntime;
   twitterUsername: string;
-
-  // The plugin that supplies random unposted announcements
   announcementPlugin: AnnouncementsPlugin;
 
   private isProcessing = false;
@@ -155,12 +284,14 @@ export class TwitterPostClient {
   private discordApprovalChannelId: string;
   private approvalCheckInterval: number;
 
-  // We'll require 2 hours (in ms) between announcement tweets
   private ANNOUNCEMENT_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
   private LAST_ANNOUNCEMENT_KEY: string;
 
   private lastAnnouncementTime = 0;
   private lastRegularPostTime = 0;
+
+  // CoinMarketCap price service
+  private priceService: ReturnType<typeof createPriceService>;
 
   constructor(
     client: ClientBase,
@@ -173,10 +304,9 @@ export class TwitterPostClient {
     this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
     this.announcementPlugin = announcementPlugin;
 
-    // We'll store the last announcement post time in the cache under this key
     this.LAST_ANNOUNCEMENT_KEY = `twitter/${this.twitterUsername}/lastAnnouncementPost`;
 
-    // Log configuration
+    // Logging config
     elizaLogger.log("Twitter Client Configuration:");
     elizaLogger.log(`- Username: ${this.twitterUsername}`);
     elizaLogger.log(`- Dry Run Mode: ${this.isDryRun ? "enabled" : "disabled"}`);
@@ -203,16 +333,11 @@ export class TwitterPostClient {
         .getSetting("TWITTER_APPROVAL_ENABLED")
         ?.toLowerCase() === "true";
     if (approvalRequired) {
-      const discordToken = this.runtime.getSetting(
-        "TWITTER_APPROVAL_DISCORD_BOT_TOKEN"
-      );
-      const approvalChannelId = this.runtime.getSetting(
-        "TWITTER_APPROVAL_DISCORD_CHANNEL_ID"
-      );
+      const discordToken = this.runtime.getSetting("TWITTER_APPROVAL_DISCORD_BOT_TOKEN");
+      const approvalChannelId = this.runtime.getSetting("TWITTER_APPROVAL_DISCORD_CHANNEL_ID");
       const APPROVAL_CHECK_INTERVAL =
-        Number.parseInt(
-          this.runtime.getSetting("TWITTER_APPROVAL_CHECK_INTERVAL")
-        ) || 5 * 60 * 1000; // 5 minutes
+        Number.parseInt(this.runtime.getSetting("TWITTER_APPROVAL_CHECK_INTERVAL")) ||
+        5 * 60 * 1000; // 5 minutes
 
       if (!discordToken || !approvalChannelId) {
         throw new Error(
@@ -226,6 +351,13 @@ export class TwitterPostClient {
 
       this.setupDiscordClient(discordToken);
     }
+
+    // Initialize the CoinMarketCap service
+    const cmcApiKey = this.runtime.getSetting("COINMARKETCAP_API_KEY");
+    if (!cmcApiKey) {
+      throw new Error("Missing environment setting: COINMARKETCAP_API_KEY");
+    }
+    this.priceService = createPriceService(cmcApiKey);
   }
 
   private setupDiscordClient(discordToken: string) {
@@ -241,15 +373,10 @@ export class TwitterPostClient {
 
     this.discordClientForApproval.once(Events.ClientReady, (readyClient) => {
       elizaLogger.log(`Discord bot is ready as ${readyClient.user.tag}!`);
-
-      // Generate invite link with required permissions
       const invite = `https://discord.com/api/oauth2/authorize?client_id=${readyClient.user.id}&permissions=274877991936&scope=bot`;
-      elizaLogger.log(
-        `Use this link to properly invite the Twitter Post Approval Discord bot: ${invite}`
-      );
+      elizaLogger.log(`Use this link to invite the bot: ${invite}`);
     });
 
-    // Login to Discord
     this.discordClientForApproval.login(discordToken);
   }
 
@@ -258,64 +385,76 @@ export class TwitterPostClient {
       await this.client.init();
     }
 
-    // Main loop for generating new tweets
     const generateNewTweetLoop = async () => {
-      // First handle any pending approvals if needed
+      // 1) Handle any pending approvals first
       if (this.approvalRequired) {
         await this.handlePendingTweet();
       }
-
-      // Retrieve last regular tweet post time
+    
+      // 2) Check last regular tweet post
       const lastPost = await this.runtime.cacheManager.get<{ timestamp: number }>(
         `twitter/${this.twitterUsername}/lastPost`
       );
       const lastPostTimestamp = lastPost?.timestamp ?? 0;
-
-      // Random interval for regular tweets
+    
+      // 3) Pick random interval for next regular/announcement tweet
       const minMinutes = this.client.twitterConfig.POST_INTERVAL_MIN;
       const maxMinutes = this.client.twitterConfig.POST_INTERVAL_MAX;
       const randomMinutes =
         Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) + minMinutes;
       const delay = randomMinutes * 60 * 1000;
-
-      // Check if it's time to post
+    
+      // 4) If it's time for a new "regular or announcement" tweet
       if (Date.now() > lastPostTimestamp + delay) {
-        // Decide if we should do an announcement or a regular tweet
         const shouldPostAnnouncement = await this.isAnnouncementDue();
         if (shouldPostAnnouncement) {
-          elizaLogger.log("[TwitterPostClient] It's time to post an announcement tweet (2 hours have passed).");
+          elizaLogger.log("Time to post an announcement tweet.");
           await this.generateAnnouncementTweet();
         } else {
-          elizaLogger.log("[TwitterPostClient] Switching to *regular* mode (not yet time for an announcement).");
+          elizaLogger.log("Posting a *regular* tweet.");
           await this.generateRegularTweet();
         }
       }
-
-      // Schedule next iteration
+    
+      // 5) (Optional) Also check if it’s time for OM token update
+      //    Suppose we only want to post OM price once every 4 hours:
+      const OM_TOKEN_INTERVAL_MS = 4 * 60 * 60 * 1000;
+      const lastOmPost = await this.runtime.cacheManager.get<{ timestamp: number }>(
+        `twitter/${this.twitterUsername}/lastOmPost`
+      );
+      const lastOmTimestamp = lastOmPost?.timestamp ?? 0;
+    
+      if (Date.now() > lastOmTimestamp + OM_TOKEN_INTERVAL_MS) {
+        // If it's time, generate token update tweet
+        elizaLogger.log("Time to post an OM token price update...");
+        await this.generateTokenUpdateTweet("USD");
+    
+        // Update "lastOmPost" so we don’t do it again too soon
+        await this.runtime.cacheManager.set(`twitter/${this.twitterUsername}/lastOmPost`, {
+          timestamp: Date.now(),
+        });
+      }
+    
+      // 6) Schedule next iteration
       setTimeout(generateNewTweetLoop, delay);
       elizaLogger.log(`Next tweet scheduled in ${randomMinutes} minutes`);
     };
 
-    // Action processing loop
     const processActionsLoop = async () => {
       const actionInterval = this.client.twitterConfig.ACTION_INTERVAL;
-
       while (!this.stopProcessingActions) {
         try {
           const results = await this.processTweetActions();
           if (results) {
             elizaLogger.log(`Processed ${results.length} tweets`);
-            elizaLogger.log(
-              `Next action processing scheduled in ${actionInterval} minutes`
-            );
-            // Sleep for the action interval
+            elizaLogger.log(`Next action check in ${actionInterval} minutes`);
             await new Promise((resolve) =>
               setTimeout(resolve, actionInterval * 60 * 1000)
             );
           }
         } catch (error) {
           elizaLogger.error("Error in action processing loop:", error);
-          await new Promise((resolve) => setTimeout(resolve, 30000)); // 30s backoff
+          await new Promise((resolve) => setTimeout(resolve, 30000));
         }
       }
     };
@@ -329,17 +468,16 @@ export class TwitterPostClient {
       }
     }
 
-    // Start the loops
+    // Start loops
     generateNewTweetLoop();
     elizaLogger.log("Tweet generation loop started");
 
     if (this.client.twitterConfig.ENABLE_ACTION_PROCESSING) {
       processActionsLoop().catch((error) => {
-        elizaLogger.error("Fatal error in process actions loop:", error);
+        elizaLogger.error("Fatal error in processActionsLoop:", error);
       });
     }
 
-    // If approvals are enabled, run the pending tweet check
     if (this.approvalRequired) {
       this.runPendingTweetCheckLoop();
     }
@@ -351,37 +489,21 @@ export class TwitterPostClient {
     }, this.approvalCheckInterval);
   }
 
-  /**
-   * Determine if it's time to post an announcement (every 2 hours).
-   */
   private async isAnnouncementDue(): Promise<boolean> {
     const lastAnnouncement = await this.runtime.cacheManager.get<{ timestamp: number }>(
       this.LAST_ANNOUNCEMENT_KEY
     );
     const lastTime = lastAnnouncement?.timestamp ?? 0;
-    const now = Date.now();
-
-    // If 2 hours have passed since last announcement
-    return now - lastTime >= this.ANNOUNCEMENT_INTERVAL_MS;
+    return Date.now() - lastTime >= this.ANNOUNCEMENT_INTERVAL_MS;
   }
 
-  /**
-   * Generate and post an announcement tweet using the AnnouncementsPlugin.
-   *
-   * FIX: Even if no announcement is found, we update the timestamp so we don't
-   * perpetually get "2 hours passed" on every loop.
-   */
-  private async generateAnnouncementTweet(): Promise<void> {
-    elizaLogger.log("Generating *announcement* tweet...");
-
+  private async generateAnnouncementTweet() {
+    elizaLogger.log("Generating announcement tweet...");
     try {
       const announcement =
         await this.announcementPlugin.getRandomUnpostedAnnouncement();
-
-      // 1) If no announcement found, update LAST_ANNOUNCEMENT_KEY anyway:
       if (!announcement) {
-        elizaLogger.log("No unposted announcements found. Skipping announcement tweet.");
-        // Mark that we *attempted* an announcement, so we won't keep re-checking
+        elizaLogger.log("No unposted announcements found. Skipping.");
         await this.runtime.cacheManager.set(this.LAST_ANNOUNCEMENT_KEY, {
           timestamp: Date.now(),
         });
@@ -398,7 +520,6 @@ export class TwitterPostClient {
         "twitter"
       );
 
-      // Build state with the announcement text
       const state = await this.runtime.composeState(
         {
           userId: this.runtime.agentId,
@@ -416,11 +537,7 @@ export class TwitterPostClient {
         }
       );
 
-      const context = composeContext({
-        state,
-        template: AnnouncementPostTemplate,
-      });
-
+      const context = composeContext({ state, template: AnnouncementPostTemplate });
       elizaLogger.debug("Announcement tweet prompt:\n" + context);
 
       const newTweetContent = await generateText({
@@ -429,7 +546,6 @@ export class TwitterPostClient {
         modelClass: ModelClass.SMALL,
       });
 
-      // Clean up the content
       let cleanedContent = "";
       try {
         const parsed = JSON.parse(newTweetContent);
@@ -445,19 +561,18 @@ export class TwitterPostClient {
           .trim();
       }
 
-      if (!cleanedContent) {
-        elizaLogger.error("Failed to parse valid announcement content.", newTweetContent);
-        return;
-      }
-
       cleanedContent = truncateToCompleteSentence(
         cleanedContent,
         this.client.twitterConfig.MAX_TWEET_LENGTH
       );
 
+      if (!cleanedContent) {
+        elizaLogger.error("Failed to parse valid announcement content:", newTweetContent);
+        return;
+      }
+
       if (this.isDryRun) {
-        elizaLogger.info(`Dry run: Would have posted announcement tweet: ${cleanedContent}`);
-        // Still update the LAST_ANNOUNCEMENT_KEY so we don't repeatedly try.
+        elizaLogger.info("Dry run mode: would post announcement tweet:\n" + cleanedContent);
         await this.runtime.cacheManager.set(this.LAST_ANNOUNCEMENT_KEY, {
           timestamp: Date.now(),
         });
@@ -465,11 +580,8 @@ export class TwitterPostClient {
       }
 
       if (this.approvalRequired) {
-        // Send for approval
-        elizaLogger.log("Sending announcement tweet for approval...");
         await this.sendForApproval(cleanedContent, roomId, newTweetContent);
       } else {
-        // Immediately post
         elizaLogger.log("Posting announcement tweet:\n" + cleanedContent);
         await this.postTweet(
           this.runtime,
@@ -479,12 +591,9 @@ export class TwitterPostClient {
           newTweetContent,
           this.twitterUsername
         );
-
-        // Mark announcement posted
         await this.announcementPlugin.markAnnouncementAsPosted(announcement.id);
       }
 
-      // 2) Update last-announcement timestamp AFTER we post or queue for approval
       await this.runtime.cacheManager.set(this.LAST_ANNOUNCEMENT_KEY, {
         timestamp: Date.now(),
       });
@@ -493,12 +602,8 @@ export class TwitterPostClient {
     }
   }
 
-  /**
-   * Generate and post a regular (non-announcement) tweet.
-   */
   private async generateRegularTweet() {
     elizaLogger.log("Generating *regular* tweet...");
-
     try {
       const roomId = stringToUuid(
         "twitter_regular_room-" + this.client.profile.username
@@ -511,7 +616,6 @@ export class TwitterPostClient {
       );
 
       const topics = this.runtime.character.topics.join(", ");
-      // Basic state for a regular tweet
       const state = await this.runtime.composeState(
         {
           userId: this.runtime.agentId,
@@ -524,15 +628,11 @@ export class TwitterPostClient {
         },
         {
           twitterUserName: this.client.profile.username,
-          topics: this.runtime.character.topics.join(", "),
+          topics,
         }
       );
 
-      const context = composeContext({
-        state,
-        template: RegularPostTemplate,
-      });
-
+      const context = composeContext({ state, template: RegularPostTemplate });
       elizaLogger.debug("Regular tweet prompt:\n" + context);
 
       const newTweetContent = await generateText({
@@ -541,7 +641,6 @@ export class TwitterPostClient {
         modelClass: ModelClass.SMALL,
       });
 
-      // Clean up
       let cleanedContent = "";
       try {
         const parsed = JSON.parse(newTweetContent);
@@ -557,23 +656,22 @@ export class TwitterPostClient {
           .trim();
       }
 
-      if (!cleanedContent) {
-        elizaLogger.error("Failed to parse valid content for regular tweet.", newTweetContent);
-        return;
-      }
-
       cleanedContent = truncateToCompleteSentence(
         cleanedContent,
         this.client.twitterConfig.MAX_TWEET_LENGTH
       );
 
+      if (!cleanedContent) {
+        elizaLogger.error("Failed to parse valid content for regular tweet.");
+        return;
+      }
+
       if (this.isDryRun) {
-        elizaLogger.info(`Dry run: Would have posted regular tweet: ${cleanedContent}`);
+        elizaLogger.info(`Dry run: Would have posted:\n${cleanedContent}`);
         return;
       }
 
       if (this.approvalRequired) {
-        elizaLogger.log("Sending regular tweet for approval...");
         await this.sendForApproval(cleanedContent, roomId, newTweetContent);
       } else {
         elizaLogger.log("Posting regular tweet:\n" + cleanedContent);
@@ -592,8 +690,119 @@ export class TwitterPostClient {
   }
 
   /**
-   * Helper method to create a Tweet object from the Twitter API response.
+   * This method fetches the OM token data from CoinMarketCap,
+   * composes the tweet, and posts (or queues for approval).
    */
+  private async generateTokenUpdateTweet(currency = "USD") {
+    elizaLogger.log("[TwitterPostClient] Generating OM token price update tweet...");
+
+    try {
+      // 1) Fetch OM token data
+      const { price, marketCap, volume24h, percentChange24h } =
+        await this.priceService.getPrice("OM", currency);
+
+      // 2) Prepare roomId
+      const roomId = stringToUuid(
+        "twitter_om_token_room-" + this.client.profile.username
+      );
+      await this.runtime.ensureUserExists(
+        this.runtime.agentId,
+        this.client.profile.username,
+        this.runtime.character.name,
+        "twitter"
+      );
+
+      // 3) Build state
+      const state = await this.runtime.composeState(
+        {
+          userId: this.runtime.agentId,
+          roomId,
+          agentId: this.runtime.agentId,
+          content: {
+            text: `OM token price data for ${currency}`,
+            action: "TWEET",
+          },
+        },
+        {
+          twitterUserName: this.client.profile.username,
+          currency,
+          price: price,            // e.g. 4 decimal places
+          marketCap: Math.round(marketCap),   // integer
+          volume24h: Math.round(volume24h),   // integer
+          percentChange24h: percentChange24h.toFixed(2),
+        }
+      );
+
+      // 4) Compose GPT prompt
+      const context = composeContext({
+        state,
+        template: TokenUpdatePostTemplate,
+      });
+      elizaLogger.debug("OM Tweet prompt:\n" + context);
+
+      // 5) Generate text
+      const rawResponse = await generateText({
+        runtime: this.runtime,
+        context,
+        modelClass: ModelClass.SMALL,
+      });
+
+      // 6) Cleanup
+      let cleanedContent = rawResponse
+        .replace(/\\n/g, "\n\n")
+        .replace(/^['"](.*)['"]$/g, "$1")
+        .trim();
+
+      try {
+        const parsed = JSON.parse(rawResponse);
+        if (parsed.text) {
+          cleanedContent = parsed.text;
+        }
+      } catch {
+        // Not JSON, so keep as-is
+      }
+
+      cleanedContent = truncateToCompleteSentence(
+        cleanedContent,
+        this.client.twitterConfig.MAX_TWEET_LENGTH
+      );
+
+      if (!cleanedContent) {
+        elizaLogger.error("Failed to generate OM token tweet content.");
+        return;
+      }
+
+      // 7) Post or queue for approval
+      if (this.isDryRun) {
+        elizaLogger.info(`[Dry Run] Would post OM token tweet:\n${cleanedContent}`);
+        return;
+      }
+
+      if (this.approvalRequired) {
+        await this.sendForApproval(cleanedContent, roomId, rawResponse);
+      } else {
+        elizaLogger.log("Posting OM token tweet:\n" + cleanedContent);
+        await this.postTweet(
+          this.runtime,
+          this.client,
+          cleanedContent,
+          roomId,
+          rawResponse,
+          this.twitterUsername
+        );
+      }
+    } catch (error) {
+      elizaLogger.error("Error generating OM token price tweet:", error);
+    }
+  }
+
+  // You can call generateTokenUpdateTweet("USD") anywhere you like,
+  // e.g. on an interval, or on a command, etc.
+
+  // ----------------------------------------------------------------------
+  // Methods for posting, approvals, and timeline actions remain unchanged
+  // ----------------------------------------------------------------------
+
   createTweetObject(
     tweetResult: any,
     client: any,
@@ -619,9 +828,6 @@ export class TwitterPostClient {
     } as Tweet;
   }
 
-  /**
-   * Actually send the final tweet (standard or note tweet), then cache it.
-   */
   async postTweet(
     runtime: IAgentRuntime,
     client: ClientBase,
@@ -631,11 +837,10 @@ export class TwitterPostClient {
     twitterUsername: string
   ) {
     try {
-      elizaLogger.log(`Posting new tweet...`);
+      elizaLogger.log("Posting new tweet...");
 
       let result;
       if (cleanedContent.length > DEFAULT_MAX_TWEET_LENGTH) {
-        // fallback to note tweet if content is too long
         result = await this.handleNoteTweet(client, cleanedContent);
       } else {
         result = await this.sendStandardTweet(client, cleanedContent);
@@ -647,29 +852,23 @@ export class TwitterPostClient {
       }
 
       const tweet = this.createTweetObject(result, client, twitterUsername);
-
       await this.processAndCacheTweet(runtime, client, tweet, roomId, newTweetContent);
     } catch (error) {
       elizaLogger.error("Error sending tweet:", error);
     }
   }
 
-  /**
-   * Submit a Note Tweet (if the account has it enabled), else fallback to standard tweet.
-   */
   async handleNoteTweet(client: ClientBase, content: string, tweetId?: string) {
     try {
       const noteTweetResult = await client.requestQueue.add(
         async () => await client.twitterClient.sendNoteTweet(content, tweetId)
       );
-
       if (noteTweetResult.errors && noteTweetResult.errors.length > 0) {
-        // If note tweet fails, fallback
-        const truncateContent = truncateToCompleteSentence(
+        const truncated = truncateToCompleteSentence(
           content,
           this.client.twitterConfig.MAX_TWEET_LENGTH
         );
-        return await this.sendStandardTweet(client, truncateContent, tweetId);
+        return await this.sendStandardTweet(client, truncated, tweetId);
       } else {
         return noteTweetResult.data.notetweet_create.tweet_results.result;
       }
@@ -678,19 +877,14 @@ export class TwitterPostClient {
     }
   }
 
-  /**
-   * Standard tweet post
-   */
   async sendStandardTweet(client: ClientBase, content: string, tweetId?: string) {
-
     try {
-
       const standardTweetResult = await client.requestQueue.add(
         async () => await client.twitterClient.sendTweet(content, tweetId)
       );
       const body = await standardTweetResult.json();
       if (!body?.data?.create_tweet?.tweet_results?.result) {
-        console.error("Error sending tweet; Bad response:", body);
+        elizaLogger.error("Bad tweet response:", body);
         return;
       }
       return body.data.create_tweet.tweet_results.result;
@@ -700,9 +894,6 @@ export class TwitterPostClient {
     }
   }
 
-  /**
-   * Once we have posted the tweet, record it in cache and memory.
-   */
   async processAndCacheTweet(
     runtime: IAgentRuntime,
     client: ClientBase,
@@ -710,23 +901,17 @@ export class TwitterPostClient {
     roomId: UUID,
     newTweetContent: string
   ) {
-    // Cache last post time
     await runtime.cacheManager.set(`twitter/${client.profile.username}/lastPost`, {
       id: tweet.id,
       timestamp: Date.now(),
     });
-
-    // Cache the tweet itself
     await client.cacheTweet(tweet);
 
-    // Log
     elizaLogger.log(`Tweet posted:\n ${tweet.permanentUrl}`);
 
-    // Ensure room and participant
     await runtime.ensureRoomExists(roomId);
     await runtime.ensureParticipantInRoom(runtime.agentId, roomId);
 
-    // Create memory
     await runtime.messageManager.createMemory({
       id: stringToUuid(tweet.id + "-" + runtime.agentId),
       userId: runtime.agentId,
@@ -742,16 +927,10 @@ export class TwitterPostClient {
     });
   }
 
-  /**
-   * Stop action-processing loop
-   */
   async stop() {
     this.stopProcessingActions = true;
   }
 
-  /**
-   * Check if there's a pending tweet for approval, etc.
-   */
   private async sendForApproval(
     cleanedContent: string,
     roomId: UUID,
@@ -762,19 +941,11 @@ export class TwitterPostClient {
         title: "New Tweet Pending Approval",
         description: cleanedContent,
         fields: [
-          {
-            name: "Character",
-            value: this.client.profile.username,
-            inline: true,
-          },
-          {
-            name: "Length",
-            value: cleanedContent.length.toString(),
-            inline: true,
-          },
+          { name: "Character", value: this.client.profile.username, inline: true },
+          { name: "Length", value: String(cleanedContent.length), inline: true },
         ],
         footer: {
-          text: "Reply with '👍' to post or '❌' to discard. This will automatically expire after 24 hours if no response is received.",
+          text: "React with '👍' to post or '❌' to discard. Expires after 24h.",
         },
         timestamp: new Date().toISOString(),
       };
@@ -782,18 +953,16 @@ export class TwitterPostClient {
       const channel = await this.discordClientForApproval.channels.fetch(
         this.discordApprovalChannelId
       );
-
       if (!channel || !(channel instanceof TextChannel)) {
         throw new Error("Invalid approval channel");
       }
 
       const message = await channel.send({ embeds: [embed] });
 
-      // Store the pending tweet
       const pendingTweetsKey = `twitter/${this.client.profile.username}/pendingTweet`;
       const currentPendingTweets =
-        (await this.runtime.cacheManager.get<PendingTweet[]>(pendingTweetsKey)) ||
-        [];
+        (await this.runtime.cacheManager.get<PendingTweet[]>(pendingTweetsKey)) || [];
+
       currentPendingTweets.push({
         cleanedContent,
         roomId,
@@ -806,7 +975,7 @@ export class TwitterPostClient {
 
       return message.id;
     } catch (error) {
-      elizaLogger.error("Error Sending Twitter Post Approval Request:", error);
+      elizaLogger.error("Error Sending Approval Request:", error);
       return null;
     }
   }
@@ -822,10 +991,7 @@ export class TwitterPostClient {
         elizaLogger.error("Invalid approval channel");
         return "PENDING";
       }
-
       const message = await channel.messages.fetch(discordMessageId);
-
-      // Check reactions
       const thumbsUpReaction = message.reactions.cache.find(
         (reaction) => reaction.emoji.name === "👍"
       );
@@ -833,12 +999,8 @@ export class TwitterPostClient {
         (reaction) => reaction.emoji.name === "❌"
       );
 
-      if (rejectReaction && rejectReaction.count > 0) {
-        return "REJECTED";
-      }
-      if (thumbsUpReaction && thumbsUpReaction.count > 0) {
-        return "APPROVED";
-      }
+      if (rejectReaction && rejectReaction.count > 0) return "REJECTED";
+      if (thumbsUpReaction && thumbsUpReaction.count > 0) return "APPROVED";
 
       return "PENDING";
     } catch (error) {
@@ -850,8 +1012,7 @@ export class TwitterPostClient {
   private async cleanupPendingTweet(discordMessageId: string) {
     const pendingTweetsKey = `twitter/${this.client.profile.username}/pendingTweet`;
     const currentPendingTweets =
-      (await this.runtime.cacheManager.get<PendingTweet[]>(pendingTweetsKey)) ||
-      [];
+      (await this.runtime.cacheManager.get<PendingTweet[]>(pendingTweetsKey)) || [];
 
     const updatedPendingTweets = currentPendingTweets.filter(
       (pt) => pt.discordMessageId !== discordMessageId
@@ -864,22 +1025,16 @@ export class TwitterPostClient {
     }
   }
 
-  /**
-   * Periodically checks if pending tweets have been approved/rejected, or expired.
-   */
   private async handlePendingTweet() {
     elizaLogger.log("Checking Pending Tweets...");
     const pendingTweetsKey = `twitter/${this.client.profile.username}/pendingTweet`;
     const pendingTweets =
-      (await this.runtime.cacheManager.get<PendingTweet[]>(pendingTweetsKey)) ||
-      [];
+      (await this.runtime.cacheManager.get<PendingTweet[]>(pendingTweetsKey)) || [];
 
     for (const pendingTweet of pendingTweets) {
       const isExpired = Date.now() - pendingTweet.timestamp > 24 * 60 * 60 * 1000;
       if (isExpired) {
         elizaLogger.log("Pending tweet expired, cleaning up");
-
-        // Optionally notify Discord
         try {
           const channel = await this.discordClientForApproval.channels.fetch(
             pendingTweet.channelId
@@ -888,26 +1043,20 @@ export class TwitterPostClient {
             const originalMessage = await channel.messages.fetch(
               pendingTweet.discordMessageId
             );
-            await originalMessage.reply(
-              "This tweet approval request has expired (24h timeout)."
-            );
+            await originalMessage.reply("Tweet approval request expired (24h).");
           }
         } catch (err) {
           elizaLogger.error("Error sending expiration notification:", err);
         }
-
         await this.cleanupPendingTweet(pendingTweet.discordMessageId);
         return;
       }
 
-      // Check approval status
       elizaLogger.log("Checking approval status...");
-      const approvalStatus = await this.checkApprovalStatus(
-        pendingTweet.discordMessageId
-      );
+      const approvalStatus = await this.checkApprovalStatus(pendingTweet.discordMessageId);
 
       if (approvalStatus === "APPROVED") {
-        elizaLogger.log("Tweet Approved, Posting");
+        elizaLogger.log("Tweet Approved, Posting...");
         await this.postTweet(
           this.runtime,
           this.client,
@@ -916,11 +1065,6 @@ export class TwitterPostClient {
           pendingTweet.newTweetContent,
           this.twitterUsername
         );
-
-        // If these are announcements, you'd need to store the announcementId in PendingTweet
-        // to call markAnnouncementAsPosted(announcementId)
-
-        // Notify on Discord about posting
         try {
           const channel = await this.discordClientForApproval.channels.fetch(
             pendingTweet.channelId
@@ -929,18 +1073,16 @@ export class TwitterPostClient {
             const originalMessage = await channel.messages.fetch(
               pendingTweet.discordMessageId
             );
-            await originalMessage.reply("Tweet has been posted successfully! ✅");
+            await originalMessage.reply("Tweet posted successfully! ✅");
           }
         } catch (error) {
           elizaLogger.error("Error sending post notification:", error);
         }
-
         await this.cleanupPendingTweet(pendingTweet.discordMessageId);
+
       } else if (approvalStatus === "REJECTED") {
-        elizaLogger.log("Tweet Rejected, Cleaning Up");
+        elizaLogger.log("Tweet Rejected, Cleaning Up.");
         await this.cleanupPendingTweet(pendingTweet.discordMessageId);
-
-        // Notify about Rejection
         try {
           const channel = await this.discordClientForApproval.channels.fetch(
             pendingTweet.channelId
@@ -949,7 +1091,7 @@ export class TwitterPostClient {
             const originalMessage = await channel.messages.fetch(
               pendingTweet.discordMessageId
             );
-            await originalMessage.reply("Tweet has been rejected! ❌");
+            await originalMessage.reply("Tweet was rejected! ❌");
           }
         } catch (error) {
           elizaLogger.error("Error sending rejection notification:", error);
@@ -958,9 +1100,6 @@ export class TwitterPostClient {
     }
   }
 
-  /**
-   * Processes timeline for possible likes/retweets/quotes/replies.
-   */
   private async processTweetActions() {
     if (this.isProcessing) {
       elizaLogger.log("Already processing tweet actions, skipping");
@@ -972,7 +1111,6 @@ export class TwitterPostClient {
       this.lastProcessTime = Date.now();
 
       elizaLogger.log("Processing tweet actions...");
-
       await this.runtime.ensureUserExists(
         this.runtime.agentId,
         this.twitterUsername,
@@ -988,7 +1126,6 @@ export class TwitterPostClient {
 
       for (const tweet of timelines) {
         try {
-          // Skip if we've already processed this tweet
           const memory = await this.runtime.messageManager.getMemoryById(
             stringToUuid(tweet.id + "-" + this.runtime.agentId)
           );
@@ -1026,9 +1163,8 @@ export class TwitterPostClient {
             context: actionContext,
             modelClass: ModelClass.SMALL,
           });
-
           if (!actionResponse) {
-            elizaLogger.log(`No valid actions generated for tweet ${tweet.id}`);
+            elizaLogger.log(`No valid actions for tweet ${tweet.id}`);
             continue;
           }
 
@@ -1040,34 +1176,30 @@ export class TwitterPostClient {
           });
         } catch (error) {
           elizaLogger.error(`Error processing tweet ${tweet.id}:`, error);
-          continue;
         }
       }
 
-      const sortProcessedTimeline = (arr: typeof processedTimelines) => {
+      const sortProcessedTimeline = (arr: {
+        tweet: Tweet;
+        actionResponse: ActionResponse;
+        tweetState: State;
+        roomId: UUID;
+      }[]) => {
         return arr.sort((a, b) => {
-          // Count how many "true" values in actionResponse
-          const countTrue = (obj: typeof a.actionResponse) =>
+          const countTrue = (obj: ActionResponse) =>
             Object.values(obj).filter(Boolean).length;
 
           const countA = countTrue(a.actionResponse);
           const countB = countTrue(b.actionResponse);
 
-          // Sort descending by count
-          if (countA !== countB) {
-            return countB - countA;
-          }
-
-          // Secondary sort by "like"
+          if (countA !== countB) return countB - countA;
           if (a.actionResponse.like !== b.actionResponse.like) {
             return a.actionResponse.like ? -1 : 1;
           }
-
           return 0;
         });
       };
 
-      // Sort and limit
       const sortedTimelines = sortProcessedTimeline(processedTimelines).slice(
         0,
         maxActionsProcessing
@@ -1082,9 +1214,6 @@ export class TwitterPostClient {
     }
   }
 
-  /**
-   * Execute the decided actions (like, retweet, quote, reply) on the tweets.
-   */
   private async processTimelineActions(
     timelines: {
       tweet: Tweet;
@@ -1100,16 +1229,15 @@ export class TwitterPostClient {
     }[]
   > {
     const results = [];
-
     for (const timeline of timelines) {
       const { actionResponse, tweetState, roomId, tweet } = timeline;
       try {
         const executedActions: string[] = [];
 
-        // Like
+        // LIKE
         if (actionResponse.like) {
           if (this.isDryRun) {
-            elizaLogger.info(`Dry run: would have liked tweet ${tweet.id}`);
+            elizaLogger.info(`Dry run: like tweet ${tweet.id}`);
             executedActions.push("like (dry run)");
           } else {
             try {
@@ -1122,10 +1250,10 @@ export class TwitterPostClient {
           }
         }
 
-        // Retweet
+        // RETWEET
         if (actionResponse.retweet) {
           if (this.isDryRun) {
-            elizaLogger.info(`Dry run: would have retweeted tweet ${tweet.id}`);
+            elizaLogger.info(`Dry run: retweet tweet ${tweet.id}`);
             executedActions.push("retweet (dry run)");
           } else {
             try {
@@ -1138,17 +1266,17 @@ export class TwitterPostClient {
           }
         }
 
-        // Quote
+        // QUOTE
         if (actionResponse.quote) {
           try {
             const result = await this.handleQuoteAction(tweet);
             if (result) executedActions.push("quote");
           } catch (error) {
-            elizaLogger.error("Error in quote tweet generation:", error);
+            elizaLogger.error("Error generating quote tweet:", error);
           }
         }
 
-        // Reply
+        // REPLY
         if (actionResponse.reply) {
           try {
             await this.handleTextOnlyReply(tweet, tweetState, executedActions);
@@ -1157,7 +1285,7 @@ export class TwitterPostClient {
           }
         }
 
-        // Record the memory for this tweet
+        // Record memory
         await this.runtime.ensureRoomExists(roomId);
         await this.runtime.ensureUserExists(
           stringToUuid(tweet.userId),
@@ -1184,23 +1312,14 @@ export class TwitterPostClient {
           });
         }
 
-        results.push({
-          tweetId: tweet.id,
-          actionResponse,
-          executedActions,
-        });
+        results.push({ tweetId: tweet.id, actionResponse, executedActions });
       } catch (error) {
         elizaLogger.error(`Error processing tweet ${tweet.id}:`, error);
-        continue;
       }
     }
-
     return results;
   }
 
-  /**
-   * Handle generating/ sending a quote tweet for a given tweet.
-   */
   private async handleQuoteAction(tweet: Tweet) {
     try {
       const thread = await buildConversationThread(tweet, this.client);
@@ -1211,7 +1330,6 @@ export class TwitterPostClient {
         )
         .join("\n\n");
 
-      // If images exist, describe them
       const imageDescriptions = [];
       if (tweet.photos?.length > 0) {
         for (const photo of tweet.photos) {
@@ -1241,10 +1359,7 @@ export class TwitterPostClient {
           userId: this.runtime.agentId,
           roomId: stringToUuid(tweet.conversationId + "-" + this.runtime.agentId),
           agentId: this.runtime.agentId,
-          content: {
-            text: tweet.text,
-            action: "QUOTE",
-          },
+          content: { text: tweet.text, action: "QUOTE" },
         },
         {
           twitterUserName: this.twitterUsername,
@@ -1252,9 +1367,9 @@ export class TwitterPostClient {
           formattedConversation,
           imageContext:
             imageDescriptions.length > 0
-              ? `\nImages in Tweet:\n${imageDescriptions
+              ? imageDescriptions
                   .map((desc, i) => `Image ${i + 1}: ${desc}`)
-                  .join("\n")}`
+                  .join("\n")
               : "",
           quotedContent,
         }
@@ -1274,16 +1389,12 @@ export class TwitterPostClient {
       elizaLogger.log("Generated quote tweet content:", quoteContent);
 
       if (this.isDryRun) {
-        elizaLogger.info(
-          `Dry run: would have posted a quote tweet for ID ${tweet.id}:\n${quoteContent}`
-        );
+        elizaLogger.info("[Dry Run] Would have posted quote tweet: " + quoteContent);
         return true;
       }
 
-      // Post it
       const result = await this.client.requestQueue.add(
-        async () =>
-          await this.client.twitterClient.sendQuoteTweet(quoteContent, tweet.id)
+        async () => await this.client.twitterClient.sendQuoteTweet(quoteContent, tweet.id)
       );
       const body = await result.json();
 
@@ -1304,9 +1415,6 @@ export class TwitterPostClient {
     }
   }
 
-  /**
-   * For text-only reply to a tweet
-   */
   private async handleTextOnlyReply(
     tweet: Tweet,
     tweetState: any,
@@ -1358,15 +1466,12 @@ export class TwitterPostClient {
           formattedConversation,
           imageContext:
             imageDescriptions.length > 0
-              ? `\nImages in Tweet:\n${imageDescriptions
-                  .map((desc, i) => `Image ${i + 1}: ${desc}`)
-                  .join("\n")}`
+              ? imageDescriptions.map((desc, i) => `Image ${i + 1}: ${desc}`).join("\n")
               : "",
           quotedContent,
         }
       );
 
-      // Generate the reply text
       const replyText = await this.generateTweetContent(enrichedState, {
         template:
           this.runtime.character.templates?.twitterMessageHandlerTemplate ||
@@ -1379,12 +1484,12 @@ export class TwitterPostClient {
       }
 
       if (this.isDryRun) {
-        elizaLogger.info(`Dry run: would have replied: ${replyText}`);
+        elizaLogger.info("[Dry Run] Would have replied with:\n" + replyText);
         executedActions.push("reply (dry run)");
         return;
       }
 
-      elizaLogger.debug("Final reply text to be sent:", replyText);
+      elizaLogger.debug("Reply text to be sent:", replyText);
 
       let result;
       if (replyText.length > DEFAULT_MAX_TWEET_LENGTH) {
@@ -1408,9 +1513,6 @@ export class TwitterPostClient {
     }
   }
 
-  /**
-   * Generate tweet content with optional template override
-   */
   private async generateTweetContent(
     tweetState: any,
     options?: {
@@ -1428,9 +1530,8 @@ export class TwitterPostClient {
       context: options?.context || context,
       modelClass: ModelClass.SMALL,
     });
-    elizaLogger.debug("generate tweet content response:\n" + response);
+    elizaLogger.debug("Generate tweet content response:\n" + response);
 
-    // Cleanup
     const cleanedResponse = response
       .replace(/```json\s*/g, "")
       .replace(/```\s*/g, "")
@@ -1450,24 +1551,18 @@ export class TwitterPostClient {
         }
       }
     } catch {
-      elizaLogger.debug("Response is not JSON, treating as plain text");
+      elizaLogger.debug("Response not JSON, treating as plain text");
     }
 
     return this.trimTweetLength(cleanedResponse);
   }
 
-  /**
-   * Simple helper to trim a tweet to maxLength, respecting sentence boundaries if possible.
-   */
   private trimTweetLength(text: string, maxLength = 280): string {
     if (text.length <= maxLength) return text;
-
     const lastSentence = text.slice(0, maxLength).lastIndexOf(".");
     if (lastSentence > 0) {
       return text.slice(0, lastSentence + 1).trim();
     }
-
-    // fallback at word boundary
     return text.slice(0, text.lastIndexOf(" ", maxLength - 3)).trim() + "...";
   }
 }

@@ -10,6 +10,7 @@ Here are the cryptocurrency symbol mappings:
 - polkadot/dot -> DOT
 - usdc -> USDC
 - tether/usdt -> USDT
+- OM/om -> OM
 
 IMPORTANT: Response must ALWAYS include both "symbol" and "currency" fields.
 
