@@ -35,7 +35,7 @@ import {
     validateCharacterConfig,
 } from "@elizaos/core";
 
-import { defaultCharacter } from "./defaultCharacter";
+import { mainCharacter } from "./mainCharacter";
 import { zgPlugin } from "@elizaos/plugin-0g";
 
 import { bootstrapPlugin } from "@elizaos/plugin-bootstrap";
@@ -104,7 +104,6 @@ import net from "net";
 import path from "path";
 import { fileURLToPath } from "url";
 import yargs from "yargs";
-import { dominosPlugin } from "@elizaos/plugin-dominos";
 import { Plugin } from "vite";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
@@ -306,7 +305,7 @@ export async function loadCharacters(
 
     if (loadedCharacters.length === 0) {
         elizaLogger.info("No characters found, using default character");
-        loadedCharacters.push(defaultCharacter);
+        loadedCharacters.push(mainCharacter);
     }
 
     return loadedCharacters;
@@ -1048,7 +1047,7 @@ const startAgents = async () => {
     let serverPort = parseInt(settings.SERVER_PORT || "3000");
     const args = parseArguments();
     let charactersArg = args.characters || args.character;
-    let characters = [defaultCharacter];
+    let characters = [mainCharacter];
 
     if (charactersArg) {
         characters = await loadCharacters(charactersArg);
