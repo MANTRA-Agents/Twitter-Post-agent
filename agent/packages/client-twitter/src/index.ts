@@ -23,8 +23,6 @@ class TwitterManager {
     interaction: TwitterInteractionClient;
     space?: TwitterSpaceClient;
 
-
-
     constructor(runtime: IAgentRuntime, twitterConfig: TwitterConfig) {
         // Pass twitterConfig to the base client
         this.client = new ClientBase(runtime, twitterConfig);
