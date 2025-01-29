@@ -40,7 +40,6 @@ export class AnnouncementsPlugin implements Plugin {
    * This allows quick lookups for posted/unposted status.
    */
   private announcementsMap: Map<string, Announcement>;
-
   /**
    * Timestamp of the last time we refreshed announcements from the source.
    */
@@ -313,6 +312,7 @@ export class AnnouncementsPlugin implements Plugin {
             modelClass : ModelClass.MEDIUM
 
         })
+
 
         return summary;
     } catch (error) {
