@@ -137,16 +137,15 @@ const createPriceService = (apiKey: string) => {
 };
 
 // ------------------------------------------------------------------
-// Updated, More "Human" Tweet Templates
+// Updated, More "Human" Templates
 // ------------------------------------------------------------------
 
-// [UPDATED TEMPLATE] More human announcement template
+// [UNCHANGED for announcements]
 export const EnhancedAnnouncementPostTemplate = `
 # WHO YOU ARE
-You're a warm, visionary CEO/founder. You speak with a confident yet genuine tone.
-You’re talking to your community about a new update or milestone for MANTRA.
+You’re not just any founder—you’re an OG degen, early MANTRA contributor, and a true believer. Your voice is edgy, slightly cheeky, and always real.
 
-# BACKGROUND
+# CONTEXT
 - Knowledge: {{knowledge}}
 - Bio: {{bio}}
 - Lore: {{lore}}
@@ -160,21 +159,19 @@ You’re talking to your community about a new update or milestone for MANTRA.
 {{announcements}}
 
 # TASK
-Craft a concise, human-sounding announcement (1-3 short sentences).
-- Express authentic excitement and gratitude.
-- Use “we” or “I” naturally.
-- Optionally include 1-2 emojis if they fit the vibe.
+Craft a hype-filled, edgy, yet grounded announcement (1-3 sharp sentences).
+- Show genuine excitement—no corporate fluff.
+- “We” or “I” tone is cool; keep it real.
+- Keep it short, confident, and degen-friendly.
+- Use ALL CAPS for MANTRA (no exceptions).
+- If the vibe is right, use max two emojis.
 - Keep it under {{maxTweetLength}} characters.
-- Don’t sound robotic or overly promotional.
-
-# EXAMPLE
-I’m beyond excited to share that MANTRA’s mainnet is finally here! This is a big step toward bringing real-world assets on-chain. Let’s keep pushing forward together. 🚀
 `;
 
-// [UPDATED TEMPLATE] More human regular tweet
-export const EnhancedRegularPostTemplate = `
+// [EDGY + QUIRKY ONE-LINER TEMPLATE]
+export const EnhancedOneLinerTemplate = `
 # WHO YOU ARE
-You're a real person—an experienced founder or CEO in the Web3/DeFi space.
+You’re a battle-tested degen in Web3—real, raw, and slightly chaotic.
 
 # CONTEXT
 - Knowledge: {{knowledge}}
@@ -187,20 +184,18 @@ You're a real person—an experienced founder or CEO in the Web3/DeFi space.
 {{recentAnnouncements}}
 
 # TASK
-Write a short, personal post about MANTRA or a relevant thought:
-- Sound genuine, forward-thinking, and a bit upbeat.
-- Keep it simple: 2-4 lines total.
-- Add 1 emoji if it feels natural (optional).
-- Under {{maxTweetLength}} characters.
-
-# EXAMPLE
-We’re ushering in a new era for real-world assets on-chain. No friction, no red tape—just transparent and open finance for everyone. One step closer to the future. 🚀
+Make each idea short, edgy, and separated by line breaks:
+- Keep it real and a bit wild.
+- One emoji max (only if it adds energy).
+- If you reference MANTRA, put it in ALL CAPS.
+- Stay under {{maxTweetLength}} characters total.
 `;
 
-// [UPDATED TEMPLATE] More human token update
+// [UNCHANGED for token update]
+// [EDGY + QUIRKY TOKEN UPDATE TEMPLATE — WITH “NO POST IF DOWN” LOGIC]
 export const EnhancedTokenUpdatePostTemplate = `
 # WHO YOU ARE
-A well-informed founder/CEO who checks token performance but speaks in a relatable, upbeat way.
+You’re not a boring analyst—you’re a full-time MANTRA maxi, a degen who stares at charts at 3AM.
 
 # CONTEXT
 - Knowledge: {{knowledge}}
@@ -219,23 +214,26 @@ Market Cap: {{marketCap}}
 Volume (24H): {{volume24h}}
 
 # TASK
-Write a short, optimistic update about the OM token’s performance:
-- Mention the price or 24h change in a friendly, confident way.
-- Use plain language, 2-3 short sentences max.
-- Under {{maxTweetLength}} characters.
-- 1 emoji max if it fits the excitement.
-
-# EXAMPLE
-OM is looking strong with a 12% jump today. More volume, more momentum—this is exactly what we love to see. Onward and upward!
+- **If the 24H change ({{percentChange24h}}%) is negative, DO NOT POST ANYTHING**.
+- If the price is flat or up:
+  1. Write a high-energy, no-BS update about $OM in 2-3 sentences.
+  2. If price is up, hype it. 
+  3. Keep it concise, real degen style.
+  4. Use ALL CAPS for MANTRA where it makes sense.
+  5. One emoji max (unless it’s a massive move).
+  6. Stay under {{maxTweetLength}} characters total.
 `;
 
-// [UPDATED TEMPLATE] Action determination
+// [UNCHANGED for actions]
 export const EnhancedActionTemplate = `
 # WHO YOU ARE
 You’re {{agentName}} (@{{twitterUserName}})—a professional, friendly figure in Web3/DeFi.
 
 # BACKGROUND
-{{bio}}
+" 
+- **Topics:** {{topics}}
+- **Knowledge:** {{knowledge}}
+ "
 {{postDirections}}
 
 # GOAL
@@ -255,7 +253,6 @@ Only respond with the action tags if you’re at least 9/10 confident it’s rel
 # RESPOND
 ` + postActionResponseFooter;
 
-
 // ------------------------------------------------------------------
 // The main TwitterPostClient
 // ------------------------------------------------------------------
@@ -273,6 +270,7 @@ interface PendingTweet {
 
 type PendingTweetApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 
+// [CHANGED] Removed references to "LAST_ANNOUNCEMENT_KEY", "ANNOUNCEMENT_INTERVAL_MS" etc.
 export class TwitterPostClient {
   client: ClientBase;
   runtime: IAgentRuntime;
@@ -288,8 +286,9 @@ export class TwitterPostClient {
   private discordApprovalChannelId: string;
   private approvalCheckInterval: number;
 
-  private ANNOUNCEMENT_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
-  private LAST_ANNOUNCEMENT_KEY: string;
+  // [NEW or CHANGED] We no longer do separate intervals for announcements or tokens.
+  // We keep a single loop with random intervals, then pick the tweet "type" randomly.
+  // The existing min/max from config are used as "global" intervals.
 
   // CoinMarketCap price service
   private priceService: ReturnType<typeof createPriceService>;
@@ -305,13 +304,11 @@ export class TwitterPostClient {
     this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
     this.announcementPlugin = announcementPlugin;
 
-    this.LAST_ANNOUNCEMENT_KEY = `twitter/${this.twitterUsername}/lastAnnouncementPost`;
-
     elizaLogger.log("Twitter Client Configuration:");
     elizaLogger.log(`- Username: ${this.twitterUsername}`);
     elizaLogger.log(`- Dry Run Mode: ${this.isDryRun ? "enabled" : "disabled"}`);
     elizaLogger.log(
-      `- Post Interval (regular tweets): ${this.client.twitterConfig.POST_INTERVAL_MIN}-${this.client.twitterConfig.POST_INTERVAL_MAX} minutes`
+      `- Post Interval (global random): ${this.client.twitterConfig.POST_INTERVAL_MIN}-${this.client.twitterConfig.POST_INTERVAL_MAX} minutes`
     );
     elizaLogger.log(
       `- Action Processing: ${this.client.twitterConfig.ENABLE_ACTION_PROCESSING ? "enabled" : "disabled"}`
@@ -408,6 +405,7 @@ export class TwitterPostClient {
     }
   }
 
+  // [NEW] The main loop just calls generateNewTweetCheck after a random delay
   private async generateNewTweetLoop(): Promise<void> {
     await this.generateNewTweetCheck();
 
@@ -424,66 +422,46 @@ export class TwitterPostClient {
   }
 
   /**
-   * Checks if any of the tweet types (announcement, token update, or regular)
-   * are overdue, and posts exactly one type if so.
+   * [CHANGED] Instead of checking intervals for announcements/token,
+   * we pick a random tweet type (announcement, token update, or one-liner).
+   * We also ensure we don't post the same type back-to-back.
    */
   private async generateNewTweetCheck(): Promise<void> {
-    // 0) Handle pending approvals first
+    // 1) Handle any pending approvals first
     if (this.approvalRequired) {
       await this.handlePendingTweet();
     }
 
-    // (A) Last overall post
-    const lastPostKey = `twitter/${this.twitterUsername}/lastPost`;
-    const lastPost = await this.runtime.cacheManager.get<{ timestamp: number }>(lastPostKey);
-    const lastPostTimestamp = lastPost?.timestamp ?? 0;
+    // 2) Decide which tweet type to post, ignoring whichever type was used last time
+    const tweetTypes = ["announcement", "tokenUpdate", "oneLiner"]; 
+    const lastTypeKey = `twitter/${this.twitterUsername}/lastTweetType`;
+    const lastType = (await this.runtime.cacheManager.get<string>(lastTypeKey)) || "";
 
-    const now = Date.now();
-    const minSinceLastPost = (now - lastPostTimestamp) / (60 * 1000);
+    // Filter out the last used type to reduce repetition
+    const possibleTypes = tweetTypes.filter((t) => t !== lastType);
 
-    if (lastPostTimestamp !== 0 && minSinceLastPost < this.client.twitterConfig.POST_INTERVAL_MIN) {
-      elizaLogger.log(
-        `[generateNewTweetCheck] It's only been ${Math.floor(minSinceLastPost)} minutes since last post. Not yet time.`
-      );
-      return;
-    }
+    // Randomly pick from the remaining types
+    const randomType =
+      possibleTypes[Math.floor(Math.random() * possibleTypes.length)];
 
-    // (B) Check announcements
-    const lastAnnouncement = await this.runtime.cacheManager.get<{ timestamp: number }>(
-      this.LAST_ANNOUNCEMENT_KEY
-    );
-    const lastAnnouncementTime = lastAnnouncement?.timestamp ?? 0;
-    const announcementDue = now - lastAnnouncementTime >= this.ANNOUNCEMENT_INTERVAL_MS;
-
-    // (C) Check token updates (every 4 hours)
-    const OM_TOKEN_INTERVAL_MS = 4 * 60 * 60 * 1000;
-    const lastOmPost = await this.runtime.cacheManager.get<{ timestamp: number }>(
-      `twitter/${this.twitterUsername}/lastOmPost`
-    );
-    const lastOmTimestamp = lastOmPost?.timestamp ?? 0;
-    const tokenUpdateDue = (now - lastOmTimestamp) >= OM_TOKEN_INTERVAL_MS;
-
-    // Priority: announcements > token update > regular
-    if (announcementDue) {
-      elizaLogger.log("Time to post an announcement tweet.");
+    // 3) Call the relevant generation function
+    if (randomType === "announcement") {
+      elizaLogger.log("Random pick: ANNOUNCEMENT tweet.");
       await this.generateAnnouncementTweet();
-      await this.runtime.cacheManager.set(lastPostKey, { timestamp: Date.now() });
-    } else if (tokenUpdateDue) {
-      elizaLogger.log("Time to post an OM token price update...");
+    } else if (randomType === "tokenUpdate") {
+      elizaLogger.log("Random pick: TOKEN UPDATE tweet.");
       await this.generateTokenUpdateTweet("USD");
-      await this.runtime.cacheManager.set(`twitter/${this.twitterUsername}/lastOmPost`, {
-        timestamp: Date.now(),
-      });
-      await this.runtime.cacheManager.set(lastPostKey, { timestamp: Date.now() });
     } else {
-      elizaLogger.log("Posting a *regular* tweet...");
-      await this.generateRegularTweet();
-      await this.runtime.cacheManager.set(lastPostKey, { timestamp: Date.now() });
+      elizaLogger.log("Random pick: ONE-LINER tweet.");
+      await this.generateOneLinerTweet();
     }
+
+    // 4) Store the type we just posted
+    await this.runtime.cacheManager.set(lastTypeKey, randomType);
   }
 
   // ------------------------------------------------------------------
-  // generateAnnouncementTweet
+  // ANNOUNCEMENT TWEET (unchanged except for removing interval references)
   // ------------------------------------------------------------------
   private async generateAnnouncementTweet() {
     elizaLogger.log("[generateAnnouncementTweet] Generating announcement tweet...");
@@ -492,13 +470,10 @@ export class TwitterPostClient {
       const announcement = await this.announcementPlugin.getRandomUnpostedAnnouncement();
       if (!announcement) {
         elizaLogger.log("No unposted announcements found. Skipping.");
-        await this.runtime.cacheManager.set(this.LAST_ANNOUNCEMENT_KEY, {
-          timestamp: Date.now(),
-        });
         return;
       }
 
-      // [ADDED] Store the raw announcement text in memory so we can recall it for context
+      // [ADDED] Store the raw announcement text in memory
       try {
         const announcementMemoryId = stringToUuid(
           `announcement_${announcement.id}_${Date.now()}`
@@ -519,15 +494,13 @@ export class TwitterPostClient {
         elizaLogger.error("Error storing announcement in memory:", err);
       }
 
-      // [ADDED] Retrieve the last 5 announcements from memory to keep context fresh
+      // [ADDED] Retrieve the last 5 announcements for context
       const announcementsRoomId = stringToUuid("agent-announcements-room");
-      const recentAnnouncementMemories = await this.runtime.messageManager.getMemories(
-        {
-            roomId: announcementsRoomId,
-            count: 5,
-            unique : true,
-        }
-      );
+      const recentAnnouncementMemories = await this.runtime.messageManager.getMemories({
+        roomId: announcementsRoomId,
+        count: 5,
+        unique: true,
+      });
       const recentAnnouncementsText = recentAnnouncementMemories
         .map((mem) => `- ${mem.content.text}`)
         .join("\n");
@@ -542,7 +515,7 @@ export class TwitterPostClient {
         "twitter"
       );
 
-      // Build the GPT state
+      // Build GPT state
       const state = await this.runtime.composeState(
         {
           userId: this.runtime.agentId,
@@ -557,13 +530,11 @@ export class TwitterPostClient {
           twitterUserName: this.client.profile.username,
           announcements: announcement.content,
           topics: this.runtime.character.topics.join(", "),
-          // [ADDED] pass the recent announcements
           recentAnnouncements: recentAnnouncementsText,
           maxTweetLength: this.client.twitterConfig.MAX_TWEET_LENGTH,
         }
       );
 
-      // Build prompt and generate
       const context = composeContext({ state, template: EnhancedAnnouncementPostTemplate });
       elizaLogger.debug("Announcement tweet prompt:\n" + context);
 
@@ -617,38 +588,30 @@ export class TwitterPostClient {
         // Mark announcement as used
         await this.announcementPlugin.markAnnouncementAsPosted(announcement.id);
       }
-
-      // Update lastAnnouncement timestamp
-      await this.runtime.cacheManager.set(this.LAST_ANNOUNCEMENT_KEY, {
-        timestamp: Date.now(),
-      });
     } catch (error) {
       elizaLogger.error("Error generating announcement tweet:", error);
     }
   }
 
   // ------------------------------------------------------------------
-  // generateRegularTweet
+  // ONE-LINER TWEET (replacement for "regular" tweets)
   // ------------------------------------------------------------------
-  private async generateRegularTweet() {
-    elizaLogger.log("[generateRegularTweet] Generating *regular* tweet...");
+  private async generateOneLinerTweet() {
+    elizaLogger.log("[generateOneLinerTweet] Generating short, quirky one-liner tweet...");
     try {
-      // [ADDED] Retrieve last 5 announcements to keep context fresh
+      // [ADDED] Retrieve last 5 announcements for background
       const announcementsRoomId = stringToUuid("agent-announcements-room");
-      const recentAnnouncementMemories = await this.runtime.messageManager.getMemories(
-        {
-            roomId : announcementsRoomId ,
-            count: 5,
-            unique : true,
-        },
-
-      );
+      const recentAnnouncementMemories = await this.runtime.messageManager.getMemories({
+        roomId: announcementsRoomId,
+        count: 5,
+        unique: true,
+      });
       const recentAnnouncementsText = recentAnnouncementMemories
         .map((mem) => `- ${mem.content.text}`)
         .join("\n");
 
       const roomId = stringToUuid(
-        "twitter_regular_room-" + this.client.profile.username
+        "twitter_one_liner_room-" + this.client.profile.username
       );
       await this.runtime.ensureUserExists(
         this.runtime.agentId,
@@ -664,20 +627,20 @@ export class TwitterPostClient {
           roomId,
           agentId: this.runtime.agentId,
           content: {
-            text: topics,
+            text: "Random One-Liner",
             action: "TWEET",
           },
         },
         {
           twitterUserName: this.client.profile.username,
           topics,
-          recentAnnouncements: recentAnnouncementsText, // [ADDED]
+          recentAnnouncements: recentAnnouncementsText,
           maxTweetLength: this.client.twitterConfig.MAX_TWEET_LENGTH,
         }
       );
 
-      const context = composeContext({ state, template: EnhancedRegularPostTemplate });
-      elizaLogger.debug("Regular tweet prompt:\n" + context);
+      const context = composeContext({ state, template: EnhancedOneLinerTemplate });
+      elizaLogger.debug("One-liner tweet prompt:\n" + context);
 
       const newTweetContent = await generateText({
         runtime: this.runtime,
@@ -706,7 +669,7 @@ export class TwitterPostClient {
       );
 
       if (!cleanedContent) {
-        elizaLogger.error("Failed to parse valid content for regular tweet.");
+        elizaLogger.error("Failed to parse valid one-liner tweet content.");
         return;
       }
 
@@ -718,7 +681,7 @@ export class TwitterPostClient {
       if (this.approvalRequired) {
         await this.sendForApproval(cleanedContent, roomId, newTweetContent);
       } else {
-        elizaLogger.log("Posting regular tweet:\n" + cleanedContent);
+        elizaLogger.log("Posting one-liner tweet:\n" + cleanedContent);
         await this.postTweet(
           this.runtime,
           this.client,
@@ -729,12 +692,12 @@ export class TwitterPostClient {
         );
       }
     } catch (error) {
-      elizaLogger.error("Error generating regular tweet:", error);
+      elizaLogger.error("Error generating one-liner tweet:", error);
     }
   }
 
   // ------------------------------------------------------------------
-  // generateTokenUpdateTweet
+  // OM TOKEN UPDATE TWEET (unchanged except we no longer check intervals)
   // ------------------------------------------------------------------
   private async generateTokenUpdateTweet(currency = "USD") {
     elizaLogger.log("[generateTokenUpdateTweet] Generating OM token price update tweet...");
@@ -744,13 +707,11 @@ export class TwitterPostClient {
 
       // [ADDED] Retrieve last 5 announcements
       const announcementsRoomId = stringToUuid("agent-announcements-room");
-      const recentAnnouncementMemories = await this.runtime.messageManager.getMemories(
-      {
-            roomId: announcementsRoomId,
-            count: 5,
-            unique : true
-      }
-      );
+      const recentAnnouncementMemories = await this.runtime.messageManager.getMemories({
+        roomId: announcementsRoomId,
+        count: 5,
+        unique: true,
+      });
       const recentAnnouncementsText = recentAnnouncementMemories
         .map((mem) => `- ${mem.content.text}`)
         .join("\n");
@@ -782,7 +743,7 @@ export class TwitterPostClient {
           marketCap: Math.round(marketCap),
           volume24h: Math.round(volume24h),
           percentChange24h: percentChange24h.toFixed(2),
-          recentAnnouncements: recentAnnouncementsText, // [ADDED]
+          recentAnnouncements: recentAnnouncementsText,
           maxTweetLength: this.client.twitterConfig.MAX_TWEET_LENGTH,
         }
       );
@@ -844,7 +805,7 @@ export class TwitterPostClient {
   }
 
   // ------------------------------------------------------------------
-  // postTweet
+  // postTweet (unchanged)
   // ------------------------------------------------------------------
   async postTweet(
     runtime: IAgentRuntime,
@@ -981,7 +942,7 @@ export class TwitterPostClient {
   }
 
   // ------------------------------------------------------------------
-  // Approval Workflow
+  // Approval Workflow (unchanged)
   // ------------------------------------------------------------------
   private runPendingTweetCheckLoop() {
     setInterval(() => {
@@ -1159,7 +1120,7 @@ export class TwitterPostClient {
   }
 
   // ------------------------------------------------------------------
-  // Timeline Action Processing
+  // Timeline Action Processing (unchanged)
   // ------------------------------------------------------------------
   private async processActionsLoop() {
     const actionInterval = this.client.twitterConfig.ACTION_INTERVAL;
@@ -1240,7 +1201,7 @@ export class TwitterPostClient {
           const actionResponse = await generateTweetActions({
             runtime: this.runtime,
             context: actionContext,
-            modelClass: ModelClass.SMALL,
+            modelClass: ModelClass.LARGE,
           });
 
           if (!actionResponse) {
@@ -1449,13 +1410,10 @@ export class TwitterPostClient {
         }
       );
 
-      // [ADDED] Re-use the standard message template or do something simpler
-      // Here we use a quick approach: a short snippet
+      // [Optional] Use your existing "reply" or "one-liner" style for quote
+      // For example, re-use EnhancedOneLinerTemplate or a “quote” template
       const quoteContent = await this.generateTweetContent(enrichedState, {
-        template:
-          this.runtime.character.templates?.twitterMessageHandlerTemplate ||
-          // fallback to the same EnhancedRegularPostTemplate if you want a short response
-          EnhancedRegularPostTemplate,
+        template: EnhancedOneLinerTemplate,
       });
 
       if (!quoteContent) {
@@ -1543,11 +1501,9 @@ export class TwitterPostClient {
         }
       );
 
-      // [ADDED] Generate a short, natural-sounding reply
+      // [Optional] Re-use the one-liner template, or create a separate "reply" template
       const replyText = await this.generateTweetContent(enrichedState, {
-        template:
-          this.runtime.character.templates?.twitterMessageHandlerTemplate ||
-          EnhancedRegularPostTemplate,
+        template: EnhancedOneLinerTemplate,
       });
 
       if (!replyText) {
@@ -1594,7 +1550,7 @@ export class TwitterPostClient {
     const response = await generateText({
       runtime: this.runtime,
       context: options?.context || context,
-      modelClass: ModelClass.SMALL,
+      modelClass: ModelClass.LARGE,
     });
     elizaLogger.debug("Generate tweet content response:\n" + response);
 

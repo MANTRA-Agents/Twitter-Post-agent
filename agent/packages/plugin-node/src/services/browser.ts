@@ -174,21 +174,7 @@ Ensure all entries are:
     };
   }
 
-  // Fallback if generation fails or response is empty
-  return {
-    formattedAnnouncement: JSON.stringify(
-      {
-        dates: "",
-        announcements: [],
-        keyUpdates: "",
-        analysis: "",
-        impact: "",
-        nextSteps: "",
-      },
-      null,
-      2
-    ),
-  };
+ 
 }
 
 

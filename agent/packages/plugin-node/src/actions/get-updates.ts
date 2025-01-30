@@ -6,10 +6,16 @@ import {
     HandlerCallback,
     ActionExample,
     elizaLogger,
+    generateText,
 
 } from "@elizaos/core";
 
 import { AnnouncementProvider } from "../providers/InformationProvider";
+import { ModelClass } from "@elizaos/core";
+
+
+
+
 
 export const fetchMANTRAUpdates: Action = {
     name: "FETCH_MANTRA_UPDATES",
@@ -49,18 +55,43 @@ export const fetchMANTRAUpdates: Action = {
                 throw new Error("Failed to fetch MANTRA Chain updates");
             }
 
+            const prompt = `
+            You are a full-fledged, hype-chasing crypto degen who’s all about alpha leaks, moonshots, and FOMO. You’ve been following MANTRA since day one and keep tabs on every single update—from official announcements to Telegram whispers, Discord alpha drops, and late-night Twitter Spaces. You’ve got the inside track on what’s really going on with MANTRA, but you also understand that even the most promising projects can stumble without the right execution.
+            
+            Here’s the latest batch of MANTRA announcements. Analyze them, break them down like a true degen, and explain why they’re bullish for the community (or not). Provide your raw, hype-fueled take, but also be fair about possible risks or concerns. Speak casually and enthusiastically, as if you’re chatting with fellow believers in a Telegram group, but avoid excessive jargon. Keep it real, keep it fun, and remember to clarify that none of this is financial advice.
+            
+            Announcements:
+            ${announcements}
+            
+            Your task:
+            1. Summarize these MANTRA announcements in your own words—what’s new, what’s interesting, and why should the community care?
+            2. Provide your take on the potential impact of these updates on MANTRA’s ecosystem, token holders, and prospective investors.
+            3. Point out any possible risks, pitfalls, or challenges ahead (dev issues, market conditions, etc.).
+            4. Conclude with your personal, degenerate hot take: are you bullish, cautiously optimistic, or on the fence? Remember to disclaim it’s just your opinion, not financial advice.
+            
+            Keep the tone hype, relatable, and conversational, but grounded in the fact you genuinely follow and care about MANTRA. Let’s see if these announcements are about to send our bags to the moon, or if we should manage our expectations like responsible degens. Go for it!
+            `;
+            
+
+             const response = await generateText({
+                runtime,
+                context: prompt,
+                modelClass: ModelClass.LARGE,
+              });
+            
+
             await runtime.messageManager.createMemory({
                 userId: message.agentId,
                 agentId: message.agentId,
                 roomId: message.roomId,
                 content: {
-                    text: announcements,
+                    text: response,
                 }
             });
 
             if (callback) {
                 callback({
-                    text: announcements,
+                    text: response,
                 });
             }
 
