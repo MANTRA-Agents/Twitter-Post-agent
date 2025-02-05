@@ -20,4 +20,4 @@ services:
       TWITTER_DRY_RUN: "false"
 
 volumes:
-  tee:
+  tee: {}
