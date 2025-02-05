@@ -12,35 +12,24 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Deploy to Droplet via SSH
+      - name: Deploy to Droplet
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           USER_NAME: ${{ secrets.USER_NAME }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          # 1) Write the private key to a file and secure it
           echo "${SSH_PRIVATE_KEY}" > private_key
           chmod 600 private_key
 
-          # 2) SSH into the Droplet and run your commands
           ssh -o StrictHostKeyChecking=no -i private_key $USER_NAME@$SSH_HOST << 'EOT'
             set -xe
 
-            # Go to your project directory
-            cd /root/Twitter-Post-agent
+            cd /root/Twitter-Post-agent/agent
 
-            # Reset local changes, checkout main, pull latest code
-            git reset --hard
-            git checkout main
-            git pull origin main
-
-            # Navigate to the agent folder (where Dockerfile/docker-compose.yml is)
-            cd agent
-
-            # Optionally bring down any running containers
             docker compose down || true
-            docker compose rm -fsv || true
 
-            # Build and run containers in detached mode
+            docker system prune -f
+
+            # Build and run the new container in background
             docker compose up --build -d
           EOT
