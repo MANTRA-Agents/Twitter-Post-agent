@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:  # Allows manual triggering as well
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -18,29 +20,31 @@ jobs:
           USER_NAME: ${{ secrets.USER_NAME }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
+          # Write the SSH private key to a file with proper permissions
           echo "${SSH_PRIVATE_KEY}" > private_key
           chmod 600 private_key
 
-          ssh -o StrictHostKeyChecking=no -i private_key $USER_NAME@$SSH_HOST << 'EOT'
+          # SSH into your droplet and run the deployment commands
+          ssh -o StrictHostKeyChecking=no -i private_key "$USER_NAME@$SSH_HOST" << 'EOT'
             set -xe
 
-            # 1) Go to your project folder on the Droplet
+            # Go to your project folder
             cd /root/Twitter-Post-agent
 
-            # 2) Ensure we're on main and pull the latest code
+            # 1) Update code from Git
             git reset --hard
             git checkout main
             git pull origin main
 
-            # 3) Then go into 'agent' (where docker-compose.yml lives)
-            cd agent
+            # 2) Remove cache if necessary
+            cd agent/packages/core
+            rm -rf cache
 
-            # 4) Bring down containers (but keep volumes)
+            # 3) Return to the folder with docker-compose.yaml
+            cd ../..
+
+            # 4) Rebuild and restart the container
             docker compose down || true
-
-            # 5) Clean up unused Docker resources (dangling images, etc.)
             docker system prune -f
-
-            # 6) Build and run the container in the background
             docker compose up --build -d
           EOT
