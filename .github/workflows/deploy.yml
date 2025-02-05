@@ -24,12 +24,23 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i private_key $USER_NAME@$SSH_HOST << 'EOT'
             set -xe
 
-            cd /root/Twitter-Post-agent/agent
+            # 1) Go to your project folder on the Droplet
+            cd /root/Twitter-Post-agent
 
+            # 2) Ensure we're on main and pull the latest code
+            git reset --hard
+            git checkout main
+            git pull origin main
+
+            # 3) Then go into 'agent' (where docker-compose.yml lives)
+            cd agent
+
+            # 4) Bring down containers (but keep volumes)
             docker compose down || true
 
+            # 5) Clean up unused Docker resources (dangling images, etc.)
             docker system prune -f
 
-            # Build and run the new container in background
+            # 6) Build and run the container in the background
             docker compose up --build -d
           EOT
