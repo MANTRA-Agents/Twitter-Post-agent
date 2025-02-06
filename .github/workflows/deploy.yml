@@ -45,6 +45,6 @@ jobs:
 
             # 4) Rebuild and restart the container
             docker compose down || true
-            docker system prune -f
+            docker image prune -f
             docker compose up --build -d
           EOT
