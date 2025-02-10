@@ -186,6 +186,8 @@ You're a sharp investor, builder, or market observer with a knack for cutting th
 - **Bio**: {{bio}}
 - **Topics of Interest**: {{topics}}
 - **Providers**: {{providers}}
+{{characterPostExamples}}
+{{postDirections}}
 
 # Task
 Write a **short, clever post** that sparks thought:
@@ -212,6 +214,8 @@ You're an informed market participant giving a **calm, realistic update** on MAN
 - **Market Cap**: {{marketCap}}
 - **Volume (24H)**: {{volume24h}}
 - **Providers**: {{providers}}
+{{characterPostExamples}}
+{{postDirections}}
 
 # Task
 Write a **short, insightful market update** on OM token.
@@ -221,6 +225,7 @@ Write a **short, insightful market update** on OM token.
 - **Frame it in a way that highlights underlying momentum or trends.**
 - **Avoid hype, exaggeration, or obvious statements.**
 - **Under {{maxTweetLength}} characters, using a clean, structured format.**
+
 `;
 
 
@@ -285,7 +290,7 @@ export class TwitterPostClient {
   private discordApprovalChannelId: string;
   private approvalCheckInterval: number;
 
-  private ANNOUNCEMENT_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
+  private ANNOUNCEMENT_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
   private LAST_ANNOUNCEMENT_KEY: string;
 
   // CoinMarketCap price service
@@ -571,7 +576,7 @@ export class TwitterPostClient {
       const newTweetContent = await generateText({
         runtime: this.runtime,
         context,
-        modelClass: ModelClass.SMALL,
+        modelClass: ModelClass.LARGE,
       });
 
       // Clean up result
@@ -667,7 +672,7 @@ export class TwitterPostClient {
       const newTweetContent = await generateText({
         runtime: this.runtime,
         context,
-        modelClass: ModelClass.SMALL,
+        modelClass: ModelClass.LARGE,
       });
 
       let cleanedContent = "";
@@ -771,7 +776,7 @@ export class TwitterPostClient {
       const rawResponse = await generateText({
         runtime: this.runtime,
         context,
-        modelClass: ModelClass.SMALL,
+        modelClass: ModelClass.MEDIUM,
       });
 
       // 6) Cleanup
@@ -1205,7 +1210,7 @@ export class TwitterPostClient {
           const actionResponse = await generateTweetActions({
             runtime: this.runtime,
             context: actionContext,
-            modelClass: ModelClass.SMALL,
+            modelClass: ModelClass.LARGE,
           });
 
           if (!actionResponse) {
