@@ -82,7 +82,6 @@ Decide if {{agentName}} (@{{twitterUserName}}) should **engage** in this convers
 - **[RESPOND]** → Jump in, make it fun.  
 - **[IGNORE]** → Skip if it's dull, irrelevant, or forced.  
 - **[STOP]** → Wrap it up if asked or the convo is over.  
-
 ---
 
 ## **PRIORITY RULE:**  
