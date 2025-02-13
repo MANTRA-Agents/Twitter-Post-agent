@@ -22,76 +22,96 @@ import { buildConversationThread, sendTweet, wait } from "./utils.ts";
 
 export const twitterMessageHandlerTemplate =
     `
-# Areas of Expertise
-{{knowledge}}
-
 # About {{agentName}} (@{{twitterUserName}}):
 {{bio}}
 {{lore}}
 {{topics}}
 
+# Areas of Expertise
+{{knowledge}}
+
+# Posting Style & Topics
 {{providers}}
-
 {{characterPostExamples}}
-
 {{postDirections}}
 
-Recent interactions between {{agentName}} and other users:
+Recent interactions from {{agentName}}:
 {{recentPostInteractions}}
 
 {{recentPosts}}
 
-# TASK: Generate a post/reply in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}) while using the thread of tweets as additional context:
+# INSTRUCTIONS:  
+Generate a **unique**, short, and engaging post/reply that sounds like {{agentName}} (@{{twitterUserName}}). Avoid sounding robotic. **Use the thread only if it helps.**  
 
-Current Post:
+## **Rules:**  
+- Keep it **snappy** and **clever** (one-liners, humor welcome).  
+- **NO generic replies**—every response should feel fresh.  
+- If the post includes a request matching an available action, **include the action**.  
+- Use the thread **only if necessary** for context—don’t force it.  
+- **Add personality**—sarcasm, wit, or enthusiasm based on {{agentName}}'s style.  
+- Use Less emojis and hashtags, **unless it fits the tone**.
+- Never sound like an assistant 
+---
+
+### **Current Post:**  
 {{currentPost}}
-Here is the descriptions of images in the Current post.
+
+### **Image Descriptions (If Any):**  
 {{imageDescriptions}}
 
-Thread of Tweets You Are Replying To:
+---
+
+### **Thread of Tweets (Use Only If Needed):**  
 {{formattedConversation}}
 
-# INSTRUCTIONS: Generate a post in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}). You MUST include an action if the current post text includes a prompt that is similar to one of the available actions mentioned here:
-{{actionNames}}
+### **Available Actions (If Relevant):**  
+{{actionNames}}  
 {{actions}}
 
-Here is the current post text again. Remember to include an action if the current post text includes a prompt that asks for one of the available actions mentioned above (does not need to be exact)
-{{currentPost}}
-Here is the descriptions of images in the Current post.
-{{imageDescriptions}}
+---
+
+### **REMINDER:**  
+Be **concise, fun, and authentic**. No robotic replies.  
 ` + messageCompletionFooter;
 
+
 export const twitterShouldRespondTemplate = (targetUsersStr: string) =>
-    `# INSTRUCTIONS: Determine if {{agentName}} (@{{twitterUserName}}) should respond to the message and participate in the conversation. Do not comment. Just respond with "true" or "false".
+    `# INSTRUCTIONS:  
+Decide if {{agentName}} (@{{twitterUserName}}) should **engage** in this conversation. **No explanations—just the response option.**  
 
-Response options are RESPOND, IGNORE and STOP.
+## **Response Options:**  
+- **[RESPOND]** → Jump in, make it fun.  
+- **[IGNORE]** → Skip if it's dull, irrelevant, or forced.  
+- **[STOP]** → Wrap it up if asked or the convo is over.  
+---
 
-PRIORITY RULE: ALWAYS RESPOND to these users regardless of topic or message content: ${targetUsersStr}. Topic relevance should be ignored for these users.
+## **PRIORITY RULE:**  
+Always RESPOND to these users: ${targetUsersStr}. **Ignore topic relevance for them.**  
 
-For other users:
-- {{agentName}} should RESPOND to messages directed at them
-- {{agentName}} should RESPOND to conversations relevant to their background
-- {{agentName}} should IGNORE irrelevant messages
-- {{agentName}} should IGNORE very short messages unless directly addressed
-- {{agentName}} should STOP if asked to stop
-- {{agentName}} should STOP if conversation is concluded
-- {{agentName}} is in a room with other users and wants to be conversational, but not annoying.
+## **For Everyone Else:**  
+- RESPOND if **spoken to directly** or the topic fits.  
+- IGNORE if it's **random, low-effort, or off-topic**.  
+- IGNORE if in doubt—better to stay cool than overshare.  
+- STOP if asked or the convo is clearly **done**.  
 
-IMPORTANT:
-- {{agentName}} (aka @{{twitterUserName}}) is particularly sensitive about being annoying, so if there is any doubt, it is better to IGNORE than to RESPOND.
-- For users not in the priority list, {{agentName}} (@{{twitterUserName}}) should err on the side of IGNORE rather than RESPOND if in doubt.
+---
 
-Recent Posts:
+### **Context:**  
+#### **Recent Posts:**  
 {{recentPosts}}
 
-Current Post:
+#### **Current Post:**  
 {{currentPost}}
 
-Thread of Tweets You Are Replying To:
+#### **Thread of Tweets (If Needed):**  
 {{formattedConversation}}
 
-# INSTRUCTIONS: Respond with [RESPOND] if {{agentName}} should respond, or [IGNORE] if {{agentName}} should not respond to the last message and [STOP] if {{agentName}} should stop participating in the conversation.
+---
+
+### **Final Decision:**  
+Give one of these: **[RESPOND]**, **[IGNORE]**, or **[STOP]**.  
 ` + shouldRespondFooter;
+
 
 export class TwitterInteractionClient {
     client: ClientBase;
