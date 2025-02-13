@@ -6,6 +6,7 @@ import { TwitterPostClient } from "./post.ts";
 import { TwitterSearchClient } from "./search.ts";
 import { TwitterSpaceClient } from "./spaces.ts";
 import { AnnouncementsPlugin } from "./plugins/AnnouncementPlugin.ts";
+import { MintscanPlugin } from "./plugins/MintScanPlugin.ts";
 
 
 /**
@@ -28,8 +29,9 @@ class TwitterManager {
         this.client = new ClientBase(runtime, twitterConfig);
 
         const announcementPlugin = new AnnouncementsPlugin(runtime)
+        const mintscanPlugin = new MintscanPlugin(runtime)
         // Posting logic
-        this.post = new TwitterPostClient(this.client, runtime ,announcementPlugin);
+        this.post = new TwitterPostClient(this.client, runtime ,announcementPlugin , mintscanPlugin);
 
         // Optional search logic (enabled if TWITTER_SEARCH_ENABLE is true)
         if (twitterConfig.TWITTER_SEARCH_ENABLE) {

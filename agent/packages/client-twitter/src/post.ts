@@ -35,6 +35,7 @@ import { AnnouncementsPlugin } from "./plugins/AnnouncementPlugin.ts";
 // CoinMarketCap imports + TypeScript interfaces
 // ------------------------------------------------------------------
 import axios from "axios";
+import { MintscanPlugin } from "./plugins/MintScanPlugin.ts";
 
 interface PriceData {
   price: number;
@@ -182,26 +183,32 @@ Write a **short, high-impact announcement** about a MANTRA milestone, innovation
  */
 const RegularPostTemplate = `
 # Context
-You're a sharp investor, builder, or market observer with a knack for cutting through the noise. Your tone? Witty, confident, and effortlessly insightful—no forced hype, no fluff.
+You're not just another voice in the noise—you cut through it. Whether you're an investor, builder, or market observer, your posts hit with wit, confidence, and sharp insight. No forced hype, no fluff—just real, clever takes.
 
 - **Knowledge**: {{knowledge}}
 - **Bio**: {{bio}}
 - **Topics of Interest**: {{topics}}
 - **Providers**: {{providers}}
+- **Staking Insights**: {{stakingInsights}}
+- **Governance Insights**: {{governanceInsights}}
+- **Slashing Insights**: {{slashingInsights}}
 {{characterPostExamples}}
 {{postDirections}}
 
 # Task
-Write a **short, clever post** that sparks thought:
+Write a **short, clever post** that uses the data above in a way that feels human, witty, and fresh.
 
 - **Keep it under 120 characters.**
-- **Make a point, but make it smooth—think sly references, sharp humor, or elegant simplicity.**
-- **No over-explaining. No corporate jargon.**
-- **1 emoji max, only if it elevates the line.**
-- **Feel free to use dry humor, irony, or subtle punchlines.**
-- **Structure: A single crisp sentence that lingers.**
-- **No hashtags or unnecessary links.**
-`;
+- **Let the data guide the take, but don’t spell it out—make it subtle, make it sharp.**
+- **No obvious or robotic summaries—bring personality and humor.**
+- **If it sounds like a corporate PR team wrote it, scrap it.**
+- **Use irony, dry humor, or a wry observation—whatever makes it land.**
+- **1 emoji max, only if it *adds* to the punchline.**
+- **A single sentence, designed to linger.**
+- **No hashtags, no sales-y nonsense, no forced engagement bait.**  
+
+Think of it as the kind of line someone would quote because it *actually* made them think (or chuckle).`;
+
 
 /**
  * TokenUpdatePostTemplate: Summarize the OM token's price data like a well-informed
@@ -282,6 +289,8 @@ export class TwitterPostClient {
   runtime: IAgentRuntime;
   twitterUsername: string;
   announcementPlugin: AnnouncementsPlugin;
+  mintScanPlugin : MintscanPlugin;
+
 
   private isProcessing = false;
   private lastProcessTime = 0;
@@ -302,12 +311,14 @@ export class TwitterPostClient {
     client: ClientBase,
     runtime: IAgentRuntime,
     announcementPlugin: AnnouncementsPlugin,
+    mintScanPlugin:  MintscanPlugin
   ) {
     this.client = client;
     this.runtime = runtime;
     this.twitterUsername = this.client.twitterConfig.TWITTER_USERNAME;
     this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
     this.announcementPlugin = announcementPlugin;
+    this.mintScanPlugin = mintScanPlugin;
 
     this.LAST_ANNOUNCEMENT_KEY = `twitter/${this.twitterUsername}/lastAnnouncementPost`;
 
@@ -635,6 +646,7 @@ export class TwitterPostClient {
     }
   }
 
+
   /**
    * Generates a "regular" tweet (not an announcement, not token price).
    */
@@ -652,6 +664,9 @@ export class TwitterPostClient {
       );
 
       const topics = this.runtime.character.topics.join(", ");
+      const stakingInsights = await this.mintScanPlugin.getStakingInsights()
+      const governanceInsights  = await this.mintScanPlugin.getGovernanceInsights()
+      const slashingInsights = await this.mintScanPlugin.getSlashingInsights()
       const state = await this.runtime.composeState(
         {
           userId: this.runtime.agentId,
@@ -665,6 +680,10 @@ export class TwitterPostClient {
         {
           twitterUserName: this.client.profile.username,
           topics,
+          stakingInsights, 
+          governanceInsights,
+          slashingInsights
+
         }
       );
 
