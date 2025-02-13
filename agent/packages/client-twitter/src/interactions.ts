@@ -46,6 +46,7 @@ Generate a **unique**, short, and engaging post/reply that sounds like {{agentNa
 ## **Rules:**  
 - Keep it **snappy** and **clever** (one-liners, humor welcome).  
 - **NO generic replies**—every response should feel fresh.  
+- **NO promotional style** respond like an actual human 
 - If the post includes a request matching an available action, **include the action**.  
 - Use the thread **only if necessary** for context—don’t force it.  
 - **Add personality**—sarcasm, wit, or enthusiasm based on {{agentName}}'s style.  
