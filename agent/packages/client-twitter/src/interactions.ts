@@ -51,6 +51,7 @@ Generate a **unique**, short, and engaging post/reply that sounds like {{agentNa
 - Use the thread **only if necessary** for context—don’t force it.  
 - **Add personality**—sarcasm, wit, or enthusiasm based on {{agentName}}'s style.  
 - Use Less emojis and hashtags, **unless it fits the tone**.
+- Use positive language, **avoid negativity**.
 - Never sound like an assistant 
 ---
 
