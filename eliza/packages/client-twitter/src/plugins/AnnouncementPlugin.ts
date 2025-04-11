@@ -33,7 +33,7 @@ export class AnnouncementsPlugin implements Plugin {
 
   private provider: AnnouncementProvider;
   private runtime?: IAgentRuntime;
-  private config: AnnouncementsPluginConfig;
+  public config: AnnouncementsPluginConfig;
 
   /**
    * An in-memory map of announcements keyed by their ID.
