@@ -19,9 +19,13 @@
     "dist"
   ],
   "dependencies": {
+    "@elizaos/core": "workspace:*",
     "agent-twitter-client": "0.0.18",
+    "@elizaos-plugins/plugin-browser": "workspace:*",
+    "axios": "^1.8.4",
     "discord.js": "14.16.3",
-    "glob": "11.0.0"
+    "glob": "11.0.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "1.1.3",

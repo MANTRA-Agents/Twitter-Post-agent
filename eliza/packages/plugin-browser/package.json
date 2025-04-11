@@ -13,6 +13,8 @@
   ],
   "dependencies": {
     "@cliqz/adblocker-playwright": "1.34.0",
+    "@elizaos/core": "workspace:*",
+    "agent-twitter-client": "0.0.18",
     "capsolver-npm": "2.0.2",
     "playwright": "1.48.2"
   },

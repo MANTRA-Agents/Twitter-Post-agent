@@ -1,10 +1,13 @@
-import { type Client, elizaLogger, type IAgentRuntime, type Plugin } from "@elizaos/core";
+import { Client, elizaLogger, IAgentRuntime } from "@elizaos/core";
 import { ClientBase } from "./base.ts";
-import { validateTwitterConfig, type TwitterConfig } from "./environment.ts";
+import { validateTwitterConfig, TwitterConfig } from "./environment.ts";
 import { TwitterInteractionClient } from "./interactions.ts";
 import { TwitterPostClient } from "./post.ts";
 import { TwitterSearchClient } from "./search.ts";
 import { TwitterSpaceClient } from "./spaces.ts";
+import { AnnouncementsPlugin } from "./plugins/AnnouncementPlugin.ts";
+import { MintscanPlugin } from "./plugins/MintScanPlugin.ts";
+
 
 /**
  * A manager that orchestrates all specialized Twitter logic:
@@ -25,8 +28,10 @@ class TwitterManager {
         // Pass twitterConfig to the base client
         this.client = new ClientBase(runtime, twitterConfig);
 
+        const announcementPlugin = new AnnouncementsPlugin(runtime)
+        const mintscanPlugin = new MintscanPlugin(runtime)
         // Posting logic
-        this.post = new TwitterPostClient(this.client, runtime);
+        this.post = new TwitterPostClient(this.client, runtime ,announcementPlugin , mintscanPlugin);
 
         // Optional search logic (enabled if TWITTER_SEARCH_ENABLE is true)
         if (twitterConfig.TWITTER_SEARCH_ENABLE) {
@@ -83,4 +88,8 @@ export const TwitterClientInterface: Client = {
 
         return manager;
     },
+
+   
 };
+
+export default TwitterClientInterface;
