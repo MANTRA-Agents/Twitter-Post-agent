@@ -1,4 +1,4 @@
-[@elizaos/core v0.25.8](../index.md) / MemoryManager
+[@elizaos/core v0.1.7](../index.md) / MemoryManager
 
 # Class: MemoryManager
 
@@ -54,7 +54,7 @@ The AgentRuntime instance associated with this manager.
 
 [packages/core/src/memory.ts:20](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L20)
 
-***
+---
 
 ### tableName
 
@@ -104,7 +104,7 @@ Error if the memory content is empty
 
 [packages/core/src/memory.ts:52](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L52)
 
-***
+---
 
 ### getMemories()
 
@@ -148,7 +148,7 @@ A Promise resolving to an array of Memory objects.
 
 [packages/core/src/memory.ts:87](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L87)
 
-***
+---
 
 ### getCachedEmbeddings()
 
@@ -170,7 +170,7 @@ A Promise resolving to an array of Memory objects.
 
 [packages/core/src/memory.ts:111](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L111)
 
-***
+---
 
 ### searchMemoriesByEmbedding()
 
@@ -188,7 +188,7 @@ The embedding vector to search with.
 
 Options including match threshold, count, user IDs, and uniqueness.
 
-• **opts.match\_threshold?**: `number`
+• **opts.match_threshold?**: `number`
 
 The similarity threshold for matching memories.
 
@@ -218,7 +218,7 @@ A Promise resolving to an array of Memory objects that match the embedding.
 
 [packages/core/src/memory.ts:137](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L137)
 
-***
+---
 
 ### createMemory()
 
@@ -250,7 +250,7 @@ A Promise that resolves when the operation completes.
 
 [packages/core/src/memory.ts:172](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L172)
 
-***
+---
 
 ### getMemoriesByRoomIds()
 
@@ -261,8 +261,6 @@ A Promise that resolves when the operation completes.
 • **params**
 
 • **params.roomIds**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`[]
-
-• **params.limit?**: `number`
 
 #### Returns
 
@@ -276,7 +274,7 @@ A Promise that resolves when the operation completes.
 
 [packages/core/src/memory.ts:192](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L192)
 
-***
+---
 
 ### getMemoryById()
 
@@ -296,9 +294,9 @@ A Promise that resolves when the operation completes.
 
 #### Defined in
 
-[packages/core/src/memory.ts:201](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L201)
+[packages/core/src/memory.ts:200](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L200)
 
-***
+---
 
 ### removeMemory()
 
@@ -324,9 +322,9 @@ A Promise that resolves when the operation completes.
 
 #### Defined in
 
-[packages/core/src/memory.ts:212](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L212)
+[packages/core/src/memory.ts:211](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L211)
 
-***
+---
 
 ### removeAllMemories()
 
@@ -352,9 +350,9 @@ A Promise that resolves when the operation completes.
 
 #### Defined in
 
-[packages/core/src/memory.ts:224](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L224)
+[packages/core/src/memory.ts:223](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L223)
 
-***
+---
 
 ### countMemories()
 
@@ -384,4 +382,4 @@ A Promise resolving to the count of memories.
 
 #### Defined in
 
-[packages/core/src/memory.ts:237](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L237)
+[packages/core/src/memory.ts:236](https://github.com/elizaOS/eliza/blob/main/packages/core/src/memory.ts#L236)

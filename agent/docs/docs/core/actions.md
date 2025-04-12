@@ -4,28 +4,20 @@ sidebar_position: 6
 
 # ⚡ Actions
 
-Actions define how agents respond to and interact with messages. They enable agents to perform tasks beyond simple message responses by integrating with external systems and modifying behavior.
+Actions are core building blocks in Eliza that define how agents respond to and interact with messages. They allow agents to interact with external systems, modify their behavior, and perform tasks beyond simple message responses.
+
+---
 
 ## Overview
 
-1. Structure:
+Each Action consists of:
 
-An Action consists of:
-
-- `name`: Unique identifier 
-- `similes`: Alternative names/triggers
-- `description`: Purpose and usage explanation
-- `validate`: Function to check if action is appropriate
-- `handler`: Core implementation logic
-- `examples`: Sample usage patterns
-- `suppressInitialMessage`: Optional flag to suppress initial response
-
-
-2. Validation:
-
-- Checks if the action can be executed
-- Consider conversation state
-- Validate required 
+- `name`: Unique identifier for the action
+- `similes`: Array of alternative names/variations
+- `description`: Detailed explanation of the action's purpose
+- `validate`: Function that checks if action is appropriate
+- `handler`: Implementation of the action's behavior
+- `examples`: Array of example usage patterns
 
 ---
 
@@ -43,8 +35,196 @@ interface Action {
 }
 ```
 
-Source: https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts
+Source: https://github.com/elizaos/eliza/packages/core/src/types.ts
 
+---
+
+# Built-in Actions
+
+---
+
+## Conversation Flow
+
+### CONTINUE
+
+- Maintains conversation when more context is needed
+- Manages natural dialogue progression
+- Limited to 3 consecutive continues
+
+### IGNORE
+
+- Gracefully disengages from conversations
+- Handles:
+    - Inappropriate interactions
+    - Natural conversation endings
+    - Post-closing responses
+
+### NONE
+
+- Default response action
+- Used for standard conversational replies
+
+---
+
+## External Integrations
+
+### TAKE_ORDER
+
+- Records trading/purchase orders
+- Processes user conviction levels
+- Validates ticker symbols and contract addresses
+
+```typescript
+const take_order: Action = {
+    name: "TAKE_ORDER",
+    similes: ["BUY_ORDER", "PLACE_ORDER"],
+    description: "Records a buy order based on the user's conviction level.",
+    validate: async (runtime: IAgentRuntime, message: Memory) => {
+        const text = (message.content as Content).text;
+        const tickerRegex = /\b[A-Z]{1,5}\b/g;
+        return tickerRegex.test(text);
+    },
+    // ... rest of implementation
+};
+```
+
+Source: https://github.com/elizaos/eliza/packages/plugin-solana/src/actions/takeOrder.ts
+
+---
+
+## Creating Custom Actions
+
+1. Implement the Action interface
+2. Define validation logic
+3. Implement handler functionality
+4. Provide usage examples
+
+Example:
+
+```typescript
+const customAction: Action = {
+    name: "CUSTOM_ACTION",
+    similes: ["SIMILAR_ACTION"],
+    description: "Action purpose",
+    validate: async (runtime: IAgentRuntime, message: Memory) => {
+        // Validation logic
+        return true;
+    },
+    handler: async (runtime: IAgentRuntime, message: Memory) => {
+        // Implementation
+    },
+    examples: [],
+};
+```
+
+### Testing Actions
+
+Use the built-in testing framework:
+
+```typescript
+test("Validate action behavior", async () => {
+    const message: Memory = {
+        userId: user.id,
+        content: { text: "Test message" },
+        roomId,
+    };
+
+    const response = await handleMessage(runtime, message);
+    // Verify response
+});
+```
+
+---
+
+## Core Concepts
+
+### Action Structure
+
+```typescript
+interface Action {
+    name: string;
+    similes: string[];
+    description: string;
+    validate: (runtime: IAgentRuntime, message: Memory) => Promise<boolean>;
+    handler: (
+        runtime: IAgentRuntime,
+        message: Memory,
+        state?: State,
+    ) => Promise<void>;
+    examples: ActionExample[][];
+    suppressInitialMessage?: boolean;
+}
+```
+
+### Key Components
+
+- **name**: Unique identifier for the action
+- **similes**: Alternative names/triggers for the action
+- **description**: Explains when and how the action should be used
+- **validate**: Determines if the action can be executed
+- **handler**: Implements the action's behavior
+- **examples**: Demonstrates proper usage patterns
+- **suppressInitialMessage**: When true, suppresses the initial response message before processing the action. Useful for actions that generate their own responses (like image generation)
+
+---
+
+## Built-in Actions
+
+### CONTINUE
+
+Continues the conversation when appropriate:
+
+```typescript
+const continueAction: Action = {
+    name: "CONTINUE",
+    similes: ["ELABORATE", "KEEP_TALKING"],
+    description:
+        "Used when the message requires a follow-up. Don't use when the conversation is finished.",
+    validate: async (runtime, message) => {
+        // Validation logic
+        return true;
+    },
+    handler: async (runtime, message, state) => {
+        // Continuation logic
+    },
+};
+```
+
+### IGNORE
+
+Stops responding to irrelevant or completed conversations:
+
+```typescript
+const ignoreAction: Action = {
+    name: "IGNORE",
+    similes: ["STOP_TALKING", "STOP_CHATTING"],
+    description:
+        "Used when ignoring the user is appropriate (conversation ended, user is aggressive, etc.)",
+    handler: async (runtime, message) => {
+        return true;
+    },
+};
+```
+
+### FOLLOW_ROOM
+
+Actively participates in a conversation:
+
+```typescript
+const followRoomAction: Action = {
+    name: "FOLLOW_ROOM",
+    similes: ["FOLLOW_CHAT", "FOLLOW_CONVERSATION"],
+    description:
+        "Start following channel with interest, responding without explicit mentions.",
+    handler: async (runtime, message) => {
+        // Room following logic
+    },
+};
+```
+
+---
+
+## Creating Custom Actions
 
 ### Basic Action Template
 
@@ -76,293 +256,300 @@ const customAction: Action = {
 };
 ```
 
-#### Character File Example
+### Advanced Action Example
 
-Actions can be used in character files as well. Here's an example from: https://github.com/elizaOS/characters/blob/main/sbf.character.json
+```typescript
+const complexAction: Action = {
+    name: "PROCESS_DOCUMENT",
+    similes: ["READ_DOCUMENT", "ANALYZE_DOCUMENT"],
+    description: "Process and analyze uploaded documents",
+    validate: async (runtime, message) => {
+        const hasAttachment = message.content.attachments?.length > 0;
+        const supportedTypes = ["pdf", "txt", "doc"];
+        return (
+            hasAttachment &&
+            supportedTypes.includes(message.content.attachments[0].type)
+        );
+    },
+    handler: async (runtime, message, state) => {
+        const attachment = message.content.attachments[0];
 
-```json
-    "messageExamples": [
-        [
-            {
-                "user": "{{user1}}",
-                "content": {
-                    "text": "Can you help transfer some SOL?"
-                }
-            },
-            {
-                "user": "SBF",
-                "content": {
-                    "text": "yeah yeah for sure, sending SOL is pretty straightforward. just need the recipient and amount. everything else is basically fine, trust me.",
-                    "action": "SEND_SOL"
-                }
-            }
-        ],
+        // Process document
+        const content = await runtime
+            .getService<IDocumentService>(ServiceType.DOCUMENT)
+            .processDocument(attachment);
+
+        // Store in memory
+        await runtime.documentsManager.createMemory({
+            id: generateId(),
+            content: { text: content },
+            userId: message.userId,
+            roomId: message.roomId,
+        });
+
+        return true;
+    },
+};
 ```
 
 ---
 
-## Example Implementations
+## Implementation Patterns
 
-Actions can be found across various plugins in the Eliza ecosystem, with a comprehensive collection available at https://github.com/elizaos-plugins. Here are some notable examples:
+### State-Based Actions
 
-### Blockchain and Token Actions
-- Transfers: `SEND_TOKEN`, `SEND_SOL`, `SEND_NEAR`, `SEND_AVAIL`, `SEND_TON`, `SEND_TOKENS`, `COSMOS_TRANSFER`, `CROSS_CHAIN_TRANSFER`
-- Token Management: `CREATE_TOKEN`, `GET_TOKEN_INFO`, `GET_BALANCE`, `GET_TOKEN_PRICE`, `TOKEN_SWAP`, `SWAP_TOKEN`, `EXECUTE_SPOT_TRADE`
-- Blockchain Interactions: `READ_CONTRACT`, `WRITE_CONTRACT`, `DEPLOY_CONTRACT`, `DEPLOY_TOKEN`, `GET_TRANSACTION`, `GET_CURRENT_NONCE`, `GET_CONTRACT_SCHEMA`
+```typescript
+const stateAction: Action = {
+    name: "UPDATE_STATE",
+    handler: async (runtime, message, state) => {
+        const newState = await runtime.composeState(message, {
+            additionalData: "new-data",
+        });
 
-### Cryptographic and Security Actions
-- Signature and Authentication: `ECDSA_SIGN`, `LIT_ACTION`, `REMOTE_ATTESTATION`, `AUTHENTICATE`
-- Wallet and Key Management: `ERC20_TRANSFER`, `WALLET_TRANSFER`, `BRIDGE_OPERATIONS`
+        await runtime.updateState(newState);
+        return true;
+    },
+};
+```
 
-### Staking and Governance
-- Staking Actions: `STAKE`, `DELEGATE_TOKEN`, `UNDELEGATE_TOKEN`, `GET_STAKE_BALANCE`, `TOKENS_REDELEGATE`
-- Governance Actions: `VOTE_ON_PROPOSAL`, `PROPOSE`, `EXECUTE_PROPOSAL`, `QUEUE_PROPOSAL`
+### Service Integration
 
-### AI and Agent Management
-- Agent Creation: `LAUNCH_AGENT`, `START_SESSION`, `CREATE_AND_REGISTER_AGENT`
-- AI-Specific Actions: `GENERATE_IMAGE`, `DESCRIBE_IMAGE`, `GENERATE_VIDEO`, `GENERATE_MUSIC`, `GET_INFERENCE`, `GENERATE_MEME`
+```typescript
+const serviceAction: Action = {
+    name: "TRANSCRIBE_AUDIO",
+    handler: async (runtime, message) => {
+        const transcriptionService = runtime.getService<ITranscriptionService>(
+            ServiceType.TRANSCRIPTION,
+        );
 
-### Media and Content Generation
-- Image and Multimedia: `SEND_GIF`, `GENERATE_3D`, `GENERATE_COLLECTION`, `MINT_NFT`, `LIST_NFT`, `SWEEP_FLOOR_NFT`
-- Audio and Voice: `EXTEND_AUDIO`, `CREATE_TTS`
+        const result = await transcriptionService.transcribe(
+            message.content.attachments[0],
+        );
 
-### Decentralized Infrastructure (DePIN)
-- Project Interactions: `DEPIN_TOKENS`, `DEPIN_ON_CHAIN`, `ANALYZE_DEPIN_PROJECTS`
+        return true;
+    },
+};
+```
 
-### Search and Information Retrieval
-- Data Search: `WEB_SEARCH`, `GET_TOKEN_PRICE_BY_ADDRESS`, `GET_TRENDING_POOLS`, `GET_NEW_COINS`, `GET_MARKETS`
+---
 
-### Blockchain and Trading
-- Specialized Actions: `GET_QUOTE_0X`, `EXECUTE_SWAP_0X`, `CANCEL_ORDERS`, `GET_INDICATIVE_PRICE`
+## Best Practices
 
-### Social and Communication
-- Platform Interactions: `TWEET`, `POST_TWEET`, `QUOTE`, `JOIN_VOICE`, `LEAVE_VOICE`, `TRANSCRIBE_MEDIA`, `SUMMARIZE_CONVERSATION`
+### Action Design
 
-### Utility Actions
-- General Utilities: `FAUCET`, `SUBMIT_DATA`, `PRICE_CHECK`, `WEATHER`, `NEWS`
+1. **Clear Purpose**
 
-Check out the [ElizaOS Plugins org](https://github.com/elizaos-plugins) on GitHub if interested in studying or using any of these.
+    - Single responsibility principle
+    - Well-defined triggers
+    - Clear success criteria
 
-### Image Generation Action
+2. **Robust Validation**
 
-Here's a comprehensive example of an image generation action:
+    - Check prerequisites
+    - Validate input data
+    - Handle edge cases
+
+3. **Error Handling**
+    - Graceful failure
+    - Meaningful error messages
+    - State recovery
+
+### Example Organization
+
+1. **Comprehensive Coverage**
+
+```typescript
+examples: [
+    // Happy path
+    [basicUsageExample],
+    // Edge cases
+    [edgeCaseExample],
+    // Error cases
+    [errorCaseExample],
+];
+```
+
+2. **Clear Context**
+
+```typescript
+examples: [
+    [
+        {
+            user: "{{user1}}",
+            content: {
+                text: "Context message showing why action is needed",
+            },
+        },
+        {
+            user: "{{user2}}",
+            content: {
+                text: "Clear response demonstrating action usage",
+                action: "ACTION_NAME",
+            },
+        },
+    ],
+];
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Action Not Triggering**
+
+    - Check validation logic
+    - Verify similes list
+    - Review example patterns
+
+2. **Handler Failures**
+
+    - Validate service availability
+    - Check state requirements
+    - Review error logs
+
+3. **State Inconsistencies**
+    - Verify state updates
+    - Check concurrent modifications
+    - Review state transitions
+
+## Advanced Features
+
+### Action Composition
+
+```typescript
+const compositeAction: Action = {
+    name: "PROCESS_AND_RESPOND",
+    handler: async (runtime, message) => {
+        // Process first action
+        await runtime.processAction("ANALYZE_CONTENT", message);
+
+        // Process second action
+        await runtime.processAction("GENERATE_RESPONSE", message);
+
+        return true;
+    },
+};
+```
+
+### Action Chains
+
+```typescript
+const chainedAction: Action = {
+    name: "WORKFLOW",
+    handler: async (runtime, message) => {
+        const actions = ["VALIDATE", "PROCESS", "RESPOND"];
+
+        for (const actionName of actions) {
+            await runtime.processAction(actionName, message);
+        }
+
+        return true;
+    },
+};
+```
+
+---
+
+## Example: Complete Action Implementation
 
 ```typescript
 import { Action, IAgentRuntime, Memory, State } from "@elizaos/core";
 
-// Example image generation action
-const generateImageAction: Action = {
-    name: "GENERATE_IMAGE", 
-    similes: ["CREATE_IMAGE", "MAKE_IMAGE", "DRAW"],
-    description: "Generates an image based on the user's description",
-    suppressInitialMessage: true, // Suppress initial response since we'll generate our own
+const documentAnalysisAction: Action = {
+    name: "ANALYZE_DOCUMENT",
+    similes: ["READ_DOCUMENT", "PROCESS_DOCUMENT", "REVIEW_DOCUMENT"],
+    description: "Analyzes uploaded documents and provides insights",
 
-    // Validate if this action should be used
     validate: async (runtime: IAgentRuntime, message: Memory) => {
-        const text = message.content.text.toLowerCase();
-        // Check if message contains image generation triggers
-        return (
-            text.includes("generate") ||
-            text.includes("create") ||
-            text.includes("draw") ||
-            text.includes("make an image")
-        );
+        // Check for document attachment
+        if (!message.content.attachments?.length) {
+            return false;
+        }
+
+        // Verify document type
+        const attachment = message.content.attachments[0];
+        return ["pdf", "txt", "doc"].includes(attachment.type);
     },
 
-    // Handle the action execution
     handler: async (runtime: IAgentRuntime, message: Memory, state?: State) => {
         try {
-            // Get image service
-            const imageService = runtime.getService(ServiceType.IMAGE_GENERATION);
-            
-            // Generate image
-            const imageUrl = await imageService.generateImage(message.content.text);
+            // Get document service
+            const docService = runtime.getService<IDocumentService>(
+                ServiceType.DOCUMENT,
+            );
 
-            // Create response with generated image
-            await runtime.messageManager.createMemory({
+            // Process document
+            const content = await docService.processDocument(
+                message.content.attachments[0],
+            );
+
+            // Store analysis
+            await runtime.documentsManager.createMemory({
                 id: generateId(),
                 content: {
-                    text: "Here's the image I generated:",
-                    attachments: [{
-                        type: "image",
-                        url: imageUrl
-                    }]
+                    text: content,
+                    analysis: await docService.analyze(content),
                 },
-                userId: runtime.agentId,
+                userId: message.userId,
                 roomId: message.roomId,
+                createdAt: Date.now(),
             });
 
             return true;
         } catch (error) {
-            console.error("Image generation failed:", error);
+            console.error("Document analysis failed:", error);
             return false;
         }
     },
 
-    // Example usage patterns
     examples: [
         [
             {
                 user: "{{user1}}",
-                content: { 
-                    text: "Can you generate an image of a sunset?" 
-                }
+                content: {
+                    text: "Can you analyze this document?",
+                    attachments: [{ type: "pdf", url: "document.pdf" }],
+                },
             },
             {
                 user: "{{user2}}",
                 content: {
-                    text: "I'll create that image for you",
-                    action: "GENERATE_IMAGE"
-                }
-            }
-        ]
-    ]
-};
-```
-
-### Basic Conversation Actions
-
-You can find these samples in the plugin-bootstrap package: https://github.com/elizaOS/eliza/tree/main/packages/plugin-bootstrap/src/actions
-
-#### CONTINUE
-
-For continuing conversations:
-
-```typescript
-const continueAction: Action = {
-    name: "CONTINUE",
-    similes: ["ELABORATE", "GO_ON"],
-    description: "Continues the conversation when appropriate",
-
-    validate: async (runtime: IAgentRuntime, message: Memory) => {
-        // Check if message warrants continuation
-        const text = message.content.text.toLowerCase();
-        return (
-            text.includes("tell me more") ||
-            text.includes("what else") ||
-            text.includes("continue") ||
-            text.endsWith("?")
-        );
-    },
-
-    handler: async (runtime: IAgentRuntime, message: Memory, state?: State) => {
-        // Get recent conversation context
-        const recentMessages = await runtime.messageManager.getMemories({
-            roomId: message.roomId,
-            count: 5
-        });
-
-        // Generate contextual response
-        const response = await runtime.generateResponse(
-            message,
-            recentMessages,
-            state
-        );
-
-        // Store response
-        await runtime.messageManager.createMemory({
-            id: generateId(),
-            content: response,
-            userId: runtime.agentId,
-            roomId: message.roomId
-        });
-
-        return true;
-    },
-
-    examples: [
-        [
-            {
-                user: "{{user1}}",
-                content: { text: "Tell me more about that" }
+                    text: "I'll analyze that document for you",
+                    action: "ANALYZE_DOCUMENT",
+                },
             },
-            {
-                user: "{{user2}}",
-                content: {
-                    text: "I'll continue explaining...",
-                    action: "CONTINUE"
-                }
-            }
-        ]
-    ]
-};
-```
-
-#### IGNORE 
-
-For ending conversations:
-
-```typescript
-const ignoreAction: Action = {
-    name: "IGNORE",
-    similes: ["STOP_TALKING", "END_CONVERSATION"],
-    description: "Stops responding when conversation is complete or irrelevant",
-
-    validate: async (runtime: IAgentRuntime, message: Memory) => {
-        const text = message.content.text.toLowerCase();
-        return (
-            text.includes("goodbye") ||
-            text.includes("bye") ||
-            text.includes("thanks") ||
-            text.length < 2
-        );
-    },
-
-    handler: async (runtime: IAgentRuntime, message: Memory) => {
-        // No response needed
-        return true;
-    },
-
-    examples: [
-        [
-            {
-                user: "{{user1}}",
-                content: { text: "Thanks, goodbye!" }
-            },
-            {
-                user: "{{user2}}",
-                content: {
-                    text: "",
-                    action: "IGNORE"
-                }
-            }
-        ]
-    ]
+        ],
+    ],
 };
 ```
 
 ---
 
-## FAQ
+# Best Practices
 
-### What are Actions in Eliza?
-Actions are core building blocks that define how agents interact with messages and perform tasks beyond simple text responses.
+1. **Validation**
 
-### How do Actions work?
-Actions consist of a name, description, validation function, and handler function that determine when and how an agent can perform a specific task.
+    - Thoroughly check input parameters
+    - Verify runtime conditions
+    - Handle edge cases
 
-### What can Actions do?
-Actions enable agents to interact with external systems, modify behavior, process complex workflows, and extend capabilities beyond conversational responses.
+2. **Error Handling**
 
-### What are some example Actions?
-Common actions include CONTINUE (extend dialogue), IGNORE (end conversation), GENERATE_IMAGE (create images), TRANSFER (move tokens), and READ_CONTRACT (retrieve blockchain data).
+    - Implement comprehensive error catching
+    - Provide clear error messages
+    - Clean up resources properly
 
-### How do I create a custom Action?
-Define an action with a unique name, validation function to check eligibility, handler function to implement the logic, and provide usage examples.
+3. **Documentation**
+    - Include clear usage examples
+    - Document expected inputs/outputs
+    - Explain error scenarios
 
-### What makes a good Action?
-A good action has a clear, single purpose, robust input validation, comprehensive error handling, and provides meaningful interactions.
-
-### Can Actions be chained together?
-Yes, actions can be composed and chained to create complex workflows and multi-step interactions.
-
-### How are Actions different from tools?
-Actions are more comprehensive, ensuring the entire process happens, while tools are typically more focused on specific, discrete operations.
-
-### Where are Actions defined?
-Actions can be defined in character files, plugins, or directly in agent configurations.
+---
 
 ## Further Reading
 
-- [characterfile](./characterfile.md)
-- [providers](./providers.md)
+- [Provider System](./providers.md)
+- [Service Integration](#)
+- [Memory Management](../../packages/core)

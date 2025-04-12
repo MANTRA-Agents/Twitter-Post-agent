@@ -1,4 +1,4 @@
-[@elizaos/core v0.25.8](../index.md) / ActionResponse
+[@elizaos/core v0.1.7](../index.md) / ActionResponse
 
 # Interface: ActionResponse
 
@@ -10,9 +10,9 @@
 
 #### Defined in
 
-[packages/core/src/types.ts:1579](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1579)
+[packages/core/src/types.ts:1311](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1311)
 
-***
+---
 
 ### retweet
 
@@ -20,9 +20,9 @@
 
 #### Defined in
 
-[packages/core/src/types.ts:1580](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1580)
+[packages/core/src/types.ts:1312](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1312)
 
-***
+---
 
 ### quote?
 
@@ -30,9 +30,9 @@
 
 #### Defined in
 
-[packages/core/src/types.ts:1581](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1581)
+[packages/core/src/types.ts:1313](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1313)
 
-***
+---
 
 ### reply?
 
@@ -40,4 +40,4 @@
 
 #### Defined in
 
-[packages/core/src/types.ts:1582](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1582)
+[packages/core/src/types.ts:1314](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1314)

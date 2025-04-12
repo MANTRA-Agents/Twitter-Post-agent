@@ -1,5 +1,5 @@
 import { Plugin, elizaLogger, IAgentRuntime, generateText, ModelClass } from "@elizaos/core";
-import { AnnouncementProvider } from "@elizaos-plugins/plugin-browser";
+import { AnnouncementProvider } from "@elizaos/plugin-node";
 
 /**
  * Enhanced Announcement interface with tracking capabilities
@@ -33,7 +33,7 @@ export class AnnouncementsPlugin implements Plugin {
 
   private provider: AnnouncementProvider;
   private runtime?: IAgentRuntime;
-  public config: AnnouncementsPluginConfig;
+  private config: AnnouncementsPluginConfig;
 
   /**
    * An in-memory map of announcements keyed by their ID.

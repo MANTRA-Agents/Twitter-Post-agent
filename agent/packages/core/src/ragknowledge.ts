@@ -2,15 +2,12 @@ import { embed } from "./embedding.ts";
 import { splitChunks } from "./generation.ts";
 import elizaLogger from "./logger.ts";
 import {
-    type IAgentRuntime,
-    type IRAGKnowledgeManager,
-    type RAGKnowledgeItem,
-    type UUID,
-    KnowledgeScope,
+    IAgentRuntime,
+    IRAGKnowledgeManager,
+    RAGKnowledgeItem,
+    UUID,
 } from "./types.ts";
 import { stringToUuid } from "./uuid.ts";
-import { existsSync } from "fs";
-import { join } from "path";
 
 /**
  * Manage knowledge in the database.
@@ -27,28 +24,18 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
     tableName: string;
 
     /**
-     * The root directory where RAG knowledge files are located (internal)
-     */
-    knowledgeRoot: string;
-
-    /**
      * Constructs a new KnowledgeManager instance.
      * @param opts Options for the manager.
      * @param opts.tableName The name of the table this manager will operate on.
      * @param opts.runtime The AgentRuntime instance associated with this manager.
      */
-    constructor(opts: {
-        tableName: string;
-        runtime: IAgentRuntime;
-        knowledgeRoot: string;
-    }) {
+    constructor(opts: { tableName: string; runtime: IAgentRuntime }) {
         this.runtime = opts.runtime;
         this.tableName = opts.tableName;
-        this.knowledgeRoot = opts.knowledgeRoot;
     }
 
     private readonly defaultRAGMatchThreshold = 0.85;
-    private readonly defaultRAGMatchCount = 8;
+    private readonly defaultRAGMatchCount = 5;
 
     /**
      * Common English stop words to filter out from query analysis
@@ -108,7 +95,7 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
         return query
             .toLowerCase()
             .split(" ")
-            .filter((term) => term.length > 2) // Filter very short words
+            .filter((term) => term.length > 3) // Filter very short words
             .filter((term) => !this.stopWords.has(term)); // Filter stop words
     }
 
@@ -124,56 +111,39 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
             return "";
         }
 
-        return (
-            content
-                .replace(/```[\s\S]*?```/g, "")
-                .replace(/`.*?`/g, "")
-                .replace(/#{1,6}\s*(.*)/g, "$1")
-                .replace(/!\[(.*?)\]\(.*?\)/g, "$1")
-                .replace(/\[(.*?)\]\(.*?\)/g, "$1")
-                .replace(/(https?:\/\/)?(www\.)?([^\s]+\.[^\s]+)/g, "$3")
-                .replace(/<@[!&]?\d+>/g, "")
-                .replace(/<[^>]*>/g, "")
-                .replace(/^\s*[-*_]{3,}\s*$/gm, "")
-                .replace(/\/\*[\s\S]*?\*\//g, "")
-                .replace(/\/\/.*/g, "")
-                .replace(/\s+/g, " ")
-                .replace(/\n{3,}/g, "\n\n")
-                // .replace(/[^a-zA-Z0-9\s\-_./:?=&]/g, "") --this strips out CJK characters
-                .trim()
-                .toLowerCase()
-        );
+        return content
+            .replace(/```[\s\S]*?```/g, "")
+            .replace(/`.*?`/g, "")
+            .replace(/#{1,6}\s*(.*)/g, "$1")
+            .replace(/!\[(.*?)\]\(.*?\)/g, "$1")
+            .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+            .replace(/(https?:\/\/)?(www\.)?([^\s]+\.[^\s]+)/g, "$3")
+            .replace(/<@[!&]?\d+>/g, "")
+            .replace(/<[^>]*>/g, "")
+            .replace(/^\s*[-*_]{3,}\s*$/gm, "")
+            .replace(/\/\*[\s\S]*?\*\//g, "")
+            .replace(/\/\/.*/g, "")
+            .replace(/\s+/g, " ")
+            .replace(/\n{3,}/g, "\n\n")
+            .replace(/[^a-zA-Z0-9\s\-_./:?=&]/g, "")
+            .trim()
+            .toLowerCase();
     }
 
     private hasProximityMatch(text: string, terms: string[]): boolean {
-        if (!text || !terms.length) {
-            return false;
-        }
-    
-        const words = text.toLowerCase().split(" ").filter(w => w.length > 0);
-        
-        // Find all positions for each term (not just first occurrence)
-        const allPositions = terms.flatMap(term => 
-            words.reduce((positions, word, idx) => {
-                if (word.includes(term)) positions.push(idx);
-                return positions;
-            }, [] as number[])
-        ).sort((a, b) => a - b);
-    
-        if (allPositions.length < 2) return false;
-    
-        // Check proximity
-        for (let i = 0; i < allPositions.length - 1; i++) {
-            if (Math.abs(allPositions[i] - allPositions[i + 1]) <= 5) {
-                elizaLogger.debug("[Proximity Match]", {
-                    terms,
-                    positions: allPositions,
-                    matchFound: `${allPositions[i]} - ${allPositions[i + 1]}`
-                });
+        const words = text.toLowerCase().split(" ");
+        const positions = terms
+            .map((term) => words.findIndex((w) => w.includes(term)))
+            .filter((pos) => pos !== -1);
+
+        if (positions.length < 2) return false;
+
+        // Check if any matches are within 5 words of each other
+        for (let i = 0; i < positions.length - 1; i++) {
+            if (Math.abs(positions[i] - positions[i + 1]) <= 5) {
                 return true;
             }
         }
-    
         return false;
     }
 
@@ -385,126 +355,6 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
         );
     }
 
-    /**
-     * Lists all knowledge entries for an agent without semantic search or reranking.
-     * Used primarily for administrative tasks like cleanup.
-     *
-     * @param agentId The agent ID to fetch knowledge entries for
-     * @returns Array of RAGKnowledgeItem entries
-     */
-    async listAllKnowledge(agentId: UUID): Promise<RAGKnowledgeItem[]> {
-        elizaLogger.debug(
-            `[Knowledge List] Fetching all entries for agent: ${agentId}`
-        );
-
-        try {
-            // Only pass the required agentId parameter
-            const results = await this.runtime.databaseAdapter.getKnowledge({
-                agentId: agentId,
-            });
-
-            elizaLogger.debug(
-                `[Knowledge List] Found ${results.length} entries`
-            );
-            return results;
-        } catch (error) {
-            elizaLogger.error(
-                "[Knowledge List] Error fetching knowledge entries:",
-                error
-            );
-            throw error;
-        }
-    }
-
-    async cleanupDeletedKnowledgeFiles() {
-        try {
-            elizaLogger.debug(
-                "[Cleanup] Starting knowledge cleanup process, agent: ",
-                this.runtime.agentId
-            );
-
-            elizaLogger.debug(
-                `[Cleanup] Knowledge root path: ${this.knowledgeRoot}`
-            );
-
-            const existingKnowledge = await this.listAllKnowledge(
-                this.runtime.agentId
-            );
-            // Only process parent documents, ignore chunks
-            const parentDocuments = existingKnowledge.filter(
-                (item) =>
-                    !item.id.includes("chunk") && item.content.metadata?.source // Must have a source path
-            );
-
-            elizaLogger.debug(
-                `[Cleanup] Found ${parentDocuments.length} parent documents to check`
-            );
-
-            for (const item of parentDocuments) {
-                const relativePath = item.content.metadata?.source;
-                const filePath = join(this.knowledgeRoot, relativePath);
-
-                elizaLogger.debug(
-                    `[Cleanup] Checking joined file path: ${filePath}`
-                );
-
-                if (!existsSync(filePath)) {
-                    elizaLogger.warn(
-                        `[Cleanup] File not found, starting removal process: ${filePath}`
-                    );
-
-                    const idToRemove = item.id;
-                    elizaLogger.debug(
-                        `[Cleanup] Using ID for removal: ${idToRemove}`
-                    );
-
-                    try {
-                        // Just remove the parent document - this will cascade to chunks
-                        await this.removeKnowledge(idToRemove);
-
-                        // // Clean up the cache
-                        // const baseCacheKeyWithWildcard = `${this.generateKnowledgeCacheKeyBase(
-                        //     idToRemove,
-                        //     item.content.metadata?.isShared || false
-                        // )}*`;
-                        // await this.cacheManager.deleteByPattern({
-                        //     keyPattern: baseCacheKeyWithWildcard,
-                        // });
-
-                        elizaLogger.success(
-                            `[Cleanup] Successfully removed knowledge for file: ${filePath}`
-                        );
-                    } catch (deleteError) {
-                        elizaLogger.error(
-                            `[Cleanup] Error during deletion process for ${filePath}:`,
-                            deleteError instanceof Error
-                                ? {
-                                      message: deleteError.message,
-                                      stack: deleteError.stack,
-                                      name: deleteError.name,
-                                  }
-                                : deleteError
-                        );
-                    }
-                }
-            }
-
-            elizaLogger.debug("[Cleanup] Finished knowledge cleanup process");
-        } catch (error) {
-            elizaLogger.error(
-                "[Cleanup] Error cleaning up deleted knowledge files:",
-                error
-            );
-        }
-    }
-
-    public generateScopedId(path: string, isShared: boolean): UUID {
-        // Prefix the path with scope before generating UUID to ensure different IDs for shared vs private
-        const scope = isShared ? KnowledgeScope.SHARED : KnowledgeScope.PRIVATE;
-        const scopedPath = `${scope}-${path}`;
-        return stringToUuid(scopedPath);
-    }
-
     async processFile(file: {
         path: string;
         content: string;
@@ -525,12 +375,6 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
                 `[File Progress] Starting ${file.path} (${fileSizeKB.toFixed(2)} KB)`
             );
 
-            // Generate scoped ID for the file
-            const scopedId = this.generateScopedId(
-                file.path,
-                file.isShared || false
-            );
-
             // Step 1: Preprocessing
             //const preprocessStart = Date.now();
             const processedContent = this.preprocess(content);
@@ -546,7 +390,7 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
 
             // Step 3: Create main document
             await this.runtime.databaseAdapter.createKnowledge({
-                id: scopedId,
+                id: stringToUuid(file.path),
                 agentId: this.runtime.agentId,
                 content: {
                     text: content,
@@ -587,7 +431,7 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
                 await Promise.all(
                     embeddings.map(async (embeddingArray, index) => {
                         const chunkId =
-                            `${scopedId}-chunk-${i + index}` as UUID;
+                            `${stringToUuid(file.path)}-chunk-${i + index}` as UUID;
                         const chunkEmbedding = new Float32Array(embeddingArray);
 
                         await this.runtime.databaseAdapter.createKnowledge({
@@ -600,9 +444,8 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
                                     type: file.type,
                                     isShared: file.isShared || false,
                                     isChunk: true,
-                                    originalId: scopedId,
+                                    originalId: stringToUuid(file.path),
                                     chunkIndex: i + index,
-                                    originalPath: file.path,
                                 },
                             },
                             embedding: chunkEmbedding,
@@ -614,7 +457,7 @@ export class RAGKnowledgeManager implements IRAGKnowledgeManager {
                 processedChunks += batch.length;
                 const batchTime = (Date.now() - batchStart) / 1000;
                 elizaLogger.info(
-                    `[Batch Progress] ${file.path}: Processed ${processedChunks}/${totalChunks} chunks (${batchTime.toFixed(2)}s for batch)`
+                    `[Batch Progress] Processed ${processedChunks}/${totalChunks} chunks (${batchTime.toFixed(2)}s for batch)`
                 );
             }
 

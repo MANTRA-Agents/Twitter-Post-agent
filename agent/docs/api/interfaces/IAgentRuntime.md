@@ -1,4 +1,4 @@
-[@elizaos/core v0.25.8](../index.md) / IAgentRuntime
+[@elizaos/core v0.1.7](../index.md) / IAgentRuntime
 
 # Interface: IAgentRuntime
 
@@ -12,9 +12,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1289](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1289)
+[packages/core/src/types.ts:1100](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1100)
 
-***
+---
 
 ### serverUrl
 
@@ -22,9 +22,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1290](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1290)
+[packages/core/src/types.ts:1101](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1101)
 
-***
+---
 
 ### databaseAdapter
 
@@ -32,9 +32,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1291](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1291)
+[packages/core/src/types.ts:1102](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1102)
 
-***
+---
 
 ### token
 
@@ -42,9 +42,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1292](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1292)
+[packages/core/src/types.ts:1103](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1103)
 
-***
+---
 
 ### modelProvider
 
@@ -52,9 +52,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1293](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1293)
+[packages/core/src/types.ts:1104](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1104)
 
-***
+---
 
 ### imageModelProvider
 
@@ -62,9 +62,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1294](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1294)
+[packages/core/src/types.ts:1105](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1105)
 
-***
+---
 
 ### imageVisionModelProvider
 
@@ -72,9 +72,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1295](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1295)
+[packages/core/src/types.ts:1106](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1106)
 
-***
+---
 
 ### character
 
@@ -82,9 +82,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1296](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1296)
+[packages/core/src/types.ts:1107](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1107)
 
-***
+---
 
 ### providers
 
@@ -92,9 +92,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1297](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1297)
+[packages/core/src/types.ts:1108](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1108)
 
-***
+---
 
 ### actions
 
@@ -102,9 +102,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1298](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1298)
+[packages/core/src/types.ts:1109](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1109)
 
-***
+---
 
 ### evaluators
 
@@ -112,9 +112,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1299](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1299)
+[packages/core/src/types.ts:1110](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1110)
 
-***
+---
 
 ### plugins
 
@@ -122,9 +122,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1300](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1300)
+[packages/core/src/types.ts:1111](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1111)
 
-***
+---
 
 ### fetch()?
 
@@ -154,9 +154,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1302](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1302)
+[packages/core/src/types.ts:1113](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1113)
 
-***
+---
 
 ### messageManager
 
@@ -164,9 +164,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1304](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1304)
+[packages/core/src/types.ts:1115](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1115)
 
-***
+---
 
 ### descriptionManager
 
@@ -174,9 +174,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1305](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1305)
+[packages/core/src/types.ts:1116](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1116)
 
-***
+---
 
 ### documentsManager
 
@@ -184,9 +184,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1306](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1306)
+[packages/core/src/types.ts:1117](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1117)
 
-***
+---
 
 ### knowledgeManager
 
@@ -194,19 +194,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1307](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1307)
+[packages/core/src/types.ts:1118](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1118)
 
-***
-
-### ragKnowledgeManager
-
-> **ragKnowledgeManager**: [`IRAGKnowledgeManager`](IRAGKnowledgeManager.md)
-
-#### Defined in
-
-[packages/core/src/types.ts:1308](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1308)
-
-***
+---
 
 ### loreManager
 
@@ -214,9 +204,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1309](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1309)
+[packages/core/src/types.ts:1119](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1119)
 
-***
+---
 
 ### cacheManager
 
@@ -224,9 +214,9 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1311](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1311)
+[packages/core/src/types.ts:1121](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1121)
 
-***
+---
 
 ### services
 
@@ -234,17 +224,20 @@ Properties
 
 #### Defined in
 
-[packages/core/src/types.ts:1313](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1313)
+[packages/core/src/types.ts:1123](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1123)
 
-***
+---
 
 ### clients
 
-> **clients**: [`ClientInstance`](../type-aliases/ClientInstance.md)[]
+> **clients**: `Record`\<`string`, `any`\>
+
+any could be EventEmitter
+but I think the real solution is forthcoming as a base client interface
 
 #### Defined in
 
-[packages/core/src/types.ts:1314](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1314)
+[packages/core/src/types.ts:1126](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1126)
 
 ## Methods
 
@@ -252,17 +245,15 @@ Properties
 
 > **initialize**(): `Promise`\<`void`\>
 
-verifiableInferenceAdapter?: IVerifiableInferenceAdapter | null;
-
 #### Returns
 
 `Promise`\<`void`\>
 
 #### Defined in
 
-[packages/core/src/types.ts:1318](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1318)
+[packages/core/src/types.ts:1128](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1128)
 
-***
+---
 
 ### registerMemoryManager()
 
@@ -278,9 +269,9 @@ verifiableInferenceAdapter?: IVerifiableInferenceAdapter | null;
 
 #### Defined in
 
-[packages/core/src/types.ts:1320](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1320)
+[packages/core/src/types.ts:1130](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1130)
 
-***
+---
 
 ### getMemoryManager()
 
@@ -296,9 +287,9 @@ verifiableInferenceAdapter?: IVerifiableInferenceAdapter | null;
 
 #### Defined in
 
-[packages/core/src/types.ts:1322](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1322)
+[packages/core/src/types.ts:1132](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1132)
 
-***
+---
 
 ### getService()
 
@@ -306,7 +297,7 @@ verifiableInferenceAdapter?: IVerifiableInferenceAdapter | null;
 
 #### Type Parameters
 
-• **T** *extends* [`Service`](../classes/Service.md)
+• **T** _extends_ [`Service`](../classes/Service.md)
 
 #### Parameters
 
@@ -318,9 +309,9 @@ verifiableInferenceAdapter?: IVerifiableInferenceAdapter | null;
 
 #### Defined in
 
-[packages/core/src/types.ts:1324](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1324)
+[packages/core/src/types.ts:1134](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1134)
 
-***
+---
 
 ### registerService()
 
@@ -336,9 +327,9 @@ verifiableInferenceAdapter?: IVerifiableInferenceAdapter | null;
 
 #### Defined in
 
-[packages/core/src/types.ts:1326](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1326)
+[packages/core/src/types.ts:1136](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1136)
 
-***
+---
 
 ### getSetting()
 
@@ -354,9 +345,9 @@ verifiableInferenceAdapter?: IVerifiableInferenceAdapter | null;
 
 #### Defined in
 
-[packages/core/src/types.ts:1328](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1328)
+[packages/core/src/types.ts:1138](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1138)
 
-***
+---
 
 ### getConversationLength()
 
@@ -370,9 +361,9 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1331](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1331)
+[packages/core/src/types.ts:1141](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1141)
 
-***
+---
 
 ### processActions()
 
@@ -394,9 +385,9 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1333](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1333)
+[packages/core/src/types.ts:1143](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1143)
 
-***
+---
 
 ### evaluate()
 
@@ -418,9 +409,9 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1340](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1340)
+[packages/core/src/types.ts:1150](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1150)
 
-***
+---
 
 ### ensureParticipantExists()
 
@@ -438,9 +429,9 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1347](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1347)
+[packages/core/src/types.ts:1157](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1157)
 
-***
+---
 
 ### ensureUserExists()
 
@@ -462,9 +453,9 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1349](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1349)
+[packages/core/src/types.ts:1159](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1159)
 
-***
+---
 
 ### registerAction()
 
@@ -480,9 +471,9 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1356](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1356)
+[packages/core/src/types.ts:1166](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1166)
 
-***
+---
 
 ### ensureConnection()
 
@@ -506,9 +497,9 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1358](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1358)
+[packages/core/src/types.ts:1168](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1168)
 
-***
+---
 
 ### ensureParticipantInRoom()
 
@@ -526,9 +517,9 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1366](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1366)
+[packages/core/src/types.ts:1176](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1176)
 
-***
+---
 
 ### ensureRoomExists()
 
@@ -544,9 +535,9 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1368](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1368)
+[packages/core/src/types.ts:1178](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1178)
 
-***
+---
 
 ### composeState()
 
@@ -564,9 +555,9 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1370](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1370)
+[packages/core/src/types.ts:1180](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1180)
 
-***
+---
 
 ### updateRecentMessageState()
 
@@ -582,4 +573,4 @@ Methods
 
 #### Defined in
 
-[packages/core/src/types.ts:1375](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1375)
+[packages/core/src/types.ts:1185](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L1185)

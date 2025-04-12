@@ -1,5 +1,5 @@
 {
-    "version": "0.25.9",
+    "version": "0.1.8+build.1",
     "packages": [
         "packages/*",
         "docs",
@@ -7,12 +7,5 @@
         "client",
         "!packages/_examples"
     ],
-    "npmClient": "pnpm",
-    "command": {
-        "publish": {
-            "registry": "https://registry.npmjs.org/",
-            "access": "public",
-            "allowBranch": "main"
-        }
-    }
+    "npmClient": "pnpm"
 }

@@ -3,21 +3,21 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createMistral } from "@ai-sdk/mistral";
 import { createGroq } from "@ai-sdk/groq";
 import { createOpenAI } from "@ai-sdk/openai";
-import { bedrock } from "@ai-sdk/amazon-bedrock";
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import {
     generateObject as aiGenerateObject,
     generateText as aiGenerateText,
-    type CoreTool,
-    type GenerateObjectResult,
-    type StepResult as AIStepResult,
+    CoreTool,
+    GenerateObjectResult,
+    StepResult as AIStepResult,
 } from "ai";
 import { Buffer } from "buffer";
 import { createOllama } from "ollama-ai-provider";
 import OpenAI from "openai";
-import { encodingForModel, type TiktokenModel } from "js-tiktoken";
-// import { AutoTokenizer } from "@huggingface/transformers";
+import { encodingForModel, TiktokenModel } from "js-tiktoken";
+import { AutoTokenizer } from "@huggingface/transformers";
 import Together from "together-ai";
-import type { ZodSchema } from "zod";
+import { ZodSchema } from "zod";
 import { elizaLogger } from "./index.ts";
 import {
     models,
@@ -34,48 +34,27 @@ import {
 } from "./parsing.ts";
 import settings from "./settings.ts";
 import {
-    type Content,
-    type IAgentRuntime,
-    type IImageDescriptionService,
-    type ITextGenerationService,
+    Content,
+    IAgentRuntime,
+    IImageDescriptionService,
+    ITextGenerationService,
     ModelClass,
     ModelProviderName,
     ServiceType,
-    type ActionResponse,
-    // type IVerifiableInferenceAdapter,
-    // type VerifiableInferenceOptions,
-    // type VerifiableInferenceResult,
+    SearchResponse,
+    ActionResponse,
+    IVerifiableInferenceAdapter,
+    VerifiableInferenceOptions,
+    VerifiableInferenceResult,
     //VerifiableInferenceProvider,
-    type TelemetrySettings,
+    TelemetrySettings,
     TokenizerType,
 } from "./types.ts";
 import { fal } from "@fal-ai/client";
-
-import BigNumber from "bignumber.js";
-import { createPublicClient, http } from "viem";
-import fs from "fs";
-import os from "os";
-import path from "path";
+import { tavily } from "@tavily/core";
 
 type Tool = CoreTool<any, any>;
 type StepResult = AIStepResult<any>;
-
-// Simplify the types to avoid deep recursion
-type GenerationResult = GenerateObjectResult<unknown>;
-
-interface ProviderOptions {
-    runtime: IAgentRuntime;
-    provider: ModelProviderName;
-    model: string;
-    apiKey: string;
-    schema?: ZodSchema;
-    schemaName?: string;
-    schemaDescription?: string;
-    mode?: "auto" | "json" | "tool";
-    modelOptions: ModelSettings;
-    modelClass: ModelClass;
-    context: string;
-}
 
 /**
  * Trims the provided text context to a specified token limit using a tokenizer model and type.
@@ -115,9 +94,9 @@ export async function trimTokens(
     }
 
     // Choose the truncation method based on tokenizer type
-    // if (tokenizerType === TokenizerType.Auto) {
-    //     return truncateAuto(tokenizerModel, context, maxTokens);
-    // }
+    if (tokenizerType === TokenizerType.Auto) {
+        return truncateAuto(tokenizerModel, context, maxTokens);
+    }
 
     if (tokenizerType === TokenizerType.TikToken) {
         return truncateTiktoken(
@@ -131,31 +110,31 @@ export async function trimTokens(
     return truncateTiktoken("gpt-4o", context, maxTokens);
 }
 
-// async function truncateAuto(
-//     modelPath: string,
-//     context: string,
-//     maxTokens: number
-// ) {
-//     try {
-//         const tokenizer = await AutoTokenizer.from_pretrained(modelPath);
-//         const tokens = tokenizer.encode(context);
+async function truncateAuto(
+    modelPath: string,
+    context: string,
+    maxTokens: number
+) {
+    try {
+        const tokenizer = await AutoTokenizer.from_pretrained(modelPath);
+        const tokens = tokenizer.encode(context);
 
-//         // If already within limits, return unchanged
-//         if (tokens.length <= maxTokens) {
-//             return context;
-//         }
+        // If already within limits, return unchanged
+        if (tokens.length <= maxTokens) {
+            return context;
+        }
 
-//         // Keep the most recent tokens by slicing from the end
-//         const truncatedTokens = tokens.slice(-maxTokens);
+        // Keep the most recent tokens by slicing from the end
+        const truncatedTokens = tokens.slice(-maxTokens);
 
-//         // Decode back to text - js-tiktoken decode() returns a string directly
-//         return tokenizer.decode(truncatedTokens);
-//     } catch (error) {
-//         elizaLogger.error("Error in trimTokens:", error);
-//         // Return truncated string if tokenization fails
-//         return context.slice(-maxTokens * 4); // Rough estimate of 4 chars per token
-//     }
-// }
+        // Decode back to text - js-tiktoken decode() returns a string directly
+        return tokenizer.decode(truncatedTokens);
+    } catch (error) {
+        elizaLogger.error("Error in trimTokens:", error);
+        // Return truncated string if tokenization fails
+        return context.slice(-maxTokens * 4); // Rough estimate of 4 chars per token
+    }
+}
 
 async function truncateTiktoken(
     model: TiktokenModel,
@@ -186,124 +165,13 @@ async function truncateTiktoken(
 }
 
 /**
- * Get OnChain EternalAI System Prompt
- * @returns System Prompt
- */
-async function getOnChainEternalAISystemPrompt(
-    runtime: IAgentRuntime
-): Promise<string> | undefined {
-    const agentId = runtime.getSetting("ETERNALAI_AGENT_ID");
-    const providerUrl = runtime.getSetting("ETERNALAI_RPC_URL");
-    const contractAddress = runtime.getSetting(
-        "ETERNALAI_AGENT_CONTRACT_ADDRESS"
-    );
-    if (agentId && providerUrl && contractAddress) {
-        // get on-chain system-prompt
-        const contractABI = [
-            {
-                inputs: [
-                    {
-                        internalType: "uint256",
-                        name: "_agentId",
-                        type: "uint256",
-                    },
-                ],
-                name: "getAgentSystemPrompt",
-                outputs: [
-                    { internalType: "bytes[]", name: "", type: "bytes[]" },
-                ],
-                stateMutability: "view",
-                type: "function",
-            },
-        ];
-
-        const publicClient = createPublicClient({
-            transport: http(providerUrl),
-        });
-
-        try {
-            const validAddress: `0x${string}` =
-                contractAddress as `0x${string}`;
-            const result = await publicClient.readContract({
-                address: validAddress,
-                abi: contractABI,
-                functionName: "getAgentSystemPrompt",
-                args: [new BigNumber(agentId)],
-            });
-            if (result) {
-                elizaLogger.info("on-chain system-prompt response", result[0]);
-                const value = result[0].toString().replace("0x", "");
-                const content = Buffer.from(value, "hex").toString("utf-8");
-                elizaLogger.info("on-chain system-prompt", content);
-                return await fetchEternalAISystemPrompt(runtime, content);
-            } else {
-                return undefined;
-            }
-        } catch (error) {
-            elizaLogger.error(error);
-            elizaLogger.error("err", error);
-        }
-    }
-    return undefined;
-}
-
-/**
- * Fetch EternalAI System Prompt
- * @returns System Prompt
- */
-async function fetchEternalAISystemPrompt(
-    runtime: IAgentRuntime,
-    content: string
-): Promise<string> | undefined {
-    const IPFS = "ipfs://";
-    const containsSubstring: boolean = content.includes(IPFS);
-    if (containsSubstring) {
-        const lightHouse = content.replace(
-            IPFS,
-            "https://gateway.lighthouse.storage/ipfs/"
-        );
-        elizaLogger.info("fetch lightHouse", lightHouse);
-        const responseLH = await fetch(lightHouse, {
-            method: "GET",
-        });
-        elizaLogger.info("fetch lightHouse resp", responseLH);
-        if (responseLH.ok) {
-            const data = await responseLH.text();
-            return data;
-        } else {
-            const gcs = content.replace(
-                IPFS,
-                "https://cdn.eternalai.org/upload/"
-            );
-            elizaLogger.info("fetch gcs", gcs);
-            const responseGCS = await fetch(gcs, {
-                method: "GET",
-            });
-            elizaLogger.info("fetch lightHouse gcs", responseGCS);
-            if (responseGCS.ok) {
-                const data = await responseGCS.text();
-                return data;
-            } else {
-                throw new Error("invalid on-chain system prompt");
-            }
-        }
-    } else {
-        return content;
-    }
-}
-
-/**
  * Gets the Cloudflare Gateway base URL for a specific provider if enabled
  * @param runtime The runtime environment
  * @param provider The model provider name
  * @returns The Cloudflare Gateway base URL if enabled, undefined otherwise
  */
-function getCloudflareGatewayBaseURL(
-    runtime: IAgentRuntime,
-    provider: string
-): string | undefined {
-    const isCloudflareEnabled =
-        runtime.getSetting("CLOUDFLARE_GW_ENABLED") === "true";
+function getCloudflareGatewayBaseURL(runtime: IAgentRuntime, provider: string): string | undefined {
+    const isCloudflareEnabled = runtime.getSetting("CLOUDFLARE_GW_ENABLED") === "true";
     const cloudflareAccountId = runtime.getSetting("CLOUDFLARE_AI_ACCOUNT_ID");
     const cloudflareGatewayId = runtime.getSetting("CLOUDFLARE_AI_GATEWAY_ID");
 
@@ -311,7 +179,7 @@ function getCloudflareGatewayBaseURL(
         isEnabled: isCloudflareEnabled,
         hasAccountId: !!cloudflareAccountId,
         hasGatewayId: !!cloudflareGatewayId,
-        provider: provider,
+        provider: provider
     });
 
     if (!isCloudflareEnabled) {
@@ -320,16 +188,12 @@ function getCloudflareGatewayBaseURL(
     }
 
     if (!cloudflareAccountId) {
-        elizaLogger.warn(
-            "Cloudflare Gateway is enabled but CLOUDFLARE_AI_ACCOUNT_ID is not set"
-        );
+        elizaLogger.warn("Cloudflare Gateway is enabled but CLOUDFLARE_AI_ACCOUNT_ID is not set");
         return undefined;
     }
 
     if (!cloudflareGatewayId) {
-        elizaLogger.warn(
-            "Cloudflare Gateway is enabled but CLOUDFLARE_AI_GATEWAY_ID is not set"
-        );
+        elizaLogger.warn("Cloudflare Gateway is enabled but CLOUDFLARE_AI_GATEWAY_ID is not set");
         return undefined;
     }
 
@@ -338,7 +202,7 @@ function getCloudflareGatewayBaseURL(
         provider,
         baseURL,
         accountId: cloudflareAccountId,
-        gatewayId: cloudflareGatewayId,
+        gatewayId: cloudflareGatewayId
     });
 
     return baseURL;
@@ -366,9 +230,9 @@ export async function generateText({
     maxSteps = 1,
     stop,
     customSystemPrompt,
-}: // verifiableInference = process.env.VERIFIABLE_INFERENCE_ENABLED === "true",
-// verifiableInferenceOptions,
-{
+    verifiableInference = process.env.VERIFIABLE_INFERENCE_ENABLED === "true",
+    verifiableInferenceOptions,
+}: {
     runtime: IAgentRuntime;
     context: string;
     modelClass: ModelClass;
@@ -377,9 +241,9 @@ export async function generateText({
     maxSteps?: number;
     stop?: string[];
     customSystemPrompt?: string;
-    // verifiableInference?: boolean;
-    // verifiableInferenceAdapter?: IVerifiableInferenceAdapter;
-    // verifiableInferenceOptions?: VerifiableInferenceOptions;
+    verifiableInference?: boolean;
+    verifiableInferenceAdapter?: IVerifiableInferenceAdapter;
+    verifiableInferenceOptions?: VerifiableInferenceOptions;
 }): Promise<string> {
     if (!context) {
         console.error("generateText context is empty");
@@ -391,36 +255,36 @@ export async function generateText({
     elizaLogger.info("Generating text with options:", {
         modelProvider: runtime.modelProvider,
         model: modelClass,
-        // verifiableInference,
+        verifiableInference,
     });
     elizaLogger.log("Using provider:", runtime.modelProvider);
     // If verifiable inference is requested and adapter is provided, use it
-    // if (verifiableInference && runtime.verifiableInferenceAdapter) {
-    //     elizaLogger.log(
-    //         "Using verifiable inference adapter:",
-    //         runtime.verifiableInferenceAdapter
-    //     );
-    //     try {
-    //         const result: VerifiableInferenceResult =
-    //             await runtime.verifiableInferenceAdapter.generateText(
-    //                 context,
-    //                 modelClass,
-    //                 verifiableInferenceOptions
-    //             );
-    //         elizaLogger.log("Verifiable inference result:", result);
-    //         // Verify the proof
-    //         const isValid =
-    //             await runtime.verifiableInferenceAdapter.verifyProof(result);
-    //         if (!isValid) {
-    //             throw new Error("Failed to verify inference proof");
-    //         }
+    if (verifiableInference && runtime.verifiableInferenceAdapter) {
+        elizaLogger.log(
+            "Using verifiable inference adapter:",
+            runtime.verifiableInferenceAdapter
+        );
+        try {
+            const result: VerifiableInferenceResult =
+                await runtime.verifiableInferenceAdapter.generateText(
+                    context,
+                    modelClass,
+                    verifiableInferenceOptions
+                );
+            elizaLogger.log("Verifiable inference result:", result);
+            // Verify the proof
+            const isValid =
+                await runtime.verifiableInferenceAdapter.verifyProof(result);
+            if (!isValid) {
+                throw new Error("Failed to verify inference proof");
+            }
 
-    //         return result.text;
-    //     } catch (error) {
-    //         elizaLogger.error("Error in verifiable inference:", error);
-    //         throw error;
-    //     }
-    // }
+            return result.text;
+        } catch (error) {
+            elizaLogger.error("Error in verifiable inference:", error);
+            throw error;
+        }
+    }
 
     const provider = runtime.modelProvider;
     elizaLogger.debug("Provider settings:", {
@@ -428,13 +292,9 @@ export async function generateText({
         hasRuntime: !!runtime,
         runtimeSettings: {
             CLOUDFLARE_GW_ENABLED: runtime.getSetting("CLOUDFLARE_GW_ENABLED"),
-            CLOUDFLARE_AI_ACCOUNT_ID: runtime.getSetting(
-                "CLOUDFLARE_AI_ACCOUNT_ID"
-            ),
-            CLOUDFLARE_AI_GATEWAY_ID: runtime.getSetting(
-                "CLOUDFLARE_AI_GATEWAY_ID"
-            ),
-        },
+            CLOUDFLARE_AI_ACCOUNT_ID: runtime.getSetting("CLOUDFLARE_AI_ACCOUNT_ID"),
+            CLOUDFLARE_AI_GATEWAY_ID: runtime.getSetting("CLOUDFLARE_AI_GATEWAY_ID")
+        }
     });
 
     const endpoint =
@@ -521,7 +381,8 @@ export async function generateText({
     const max_context_length =
         modelConfiguration?.maxInputTokens || modelSettings.maxInputTokens;
     const max_response_length =
-        modelConfiguration?.maxOutputTokens || modelSettings.maxOutputTokens;
+        modelConfiguration?.max_response_length ||
+        modelSettings.maxOutputTokens;
     const experimental_telemetry =
         modelConfiguration?.experimental_telemetry ||
         modelSettings.experimental_telemetry;
@@ -552,14 +413,9 @@ export async function generateText({
             case ModelProviderName.HYPERBOLIC:
             case ModelProviderName.TOGETHER:
             case ModelProviderName.NINETEEN_AI:
-            case ModelProviderName.AKASH_CHAT_API:
-            case ModelProviderName.LMSTUDIO:
-            case ModelProviderName.NEARAI: {
-                elizaLogger.debug(
-                    "Initializing OpenAI model with Cloudflare check"
-                );
-                const baseURL =
-                    getCloudflareGatewayBaseURL(runtime, "openai") || endpoint;
+            case ModelProviderName.AKASH_CHAT_API: {
+                elizaLogger.debug("Initializing OpenAI model with Cloudflare check");
+                const baseURL = getCloudflareGatewayBaseURL(runtime, 'openai') || endpoint;
 
                 //elizaLogger.debug("OpenAI baseURL result:", { baseURL });
                 const openai = createOpenAI({
@@ -595,26 +451,15 @@ export async function generateText({
                 const openai = createOpenAI({
                     apiKey,
                     baseURL: endpoint,
-                    fetch: async (
-                        input: RequestInfo | URL,
-                        init?: RequestInit
-                    ): Promise<Response> => {
-                        const url =
-                            typeof input === "string"
-                                ? input
-                                : input.toString();
+                    fetch: async (url: string, options: any) => {
                         const chain_id =
                             runtime.getSetting("ETERNALAI_CHAIN_ID") || "45762";
-
-                        const options: RequestInit = { ...init };
                         if (options?.body) {
-                            const body = JSON.parse(options.body as string);
+                            const body = JSON.parse(options.body);
                             body.chain_id = chain_id;
                             options.body = JSON.stringify(body);
                         }
-
                         const fetching = await runtime.fetch(url, options);
-
                         if (
                             parseBooleanFromText(
                                 runtime.getSetting("ETERNALAI_LOG")
@@ -640,32 +485,10 @@ export async function generateText({
                     },
                 });
 
-                let system_prompt =
-                    runtime.character.system ??
-                    settings.SYSTEM_PROMPT ??
-                    undefined;
-                try {
-                    const on_chain_system_prompt =
-                        await getOnChainEternalAISystemPrompt(runtime);
-                    if (!on_chain_system_prompt) {
-                        elizaLogger.error(
-                            new Error("invalid on_chain_system_prompt")
-                        );
-                    } else {
-                        system_prompt = on_chain_system_prompt;
-                        elizaLogger.info(
-                            "new on-chain system prompt",
-                            system_prompt
-                        );
-                    }
-                } catch (e) {
-                    elizaLogger.error(e);
-                }
-
                 const { text: openaiResponse } = await aiGenerateText({
                     model: openai.languageModel(model),
                     prompt: context,
-                    system: system_prompt,
+                    system: runtime.character.system ?? settings.SYSTEM_PROMPT ?? undefined,
                     temperature: temperature,
                     maxTokens: max_response_length,
                     frequencyPenalty: frequency_penalty,
@@ -727,19 +550,11 @@ export async function generateText({
             }
 
             case ModelProviderName.ANTHROPIC: {
-                elizaLogger.debug(
-                    "Initializing Anthropic model with Cloudflare check"
-                );
-                const baseURL =
-                    getCloudflareGatewayBaseURL(runtime, "anthropic") ||
-                    "https://api.anthropic.com/v1";
+                elizaLogger.debug("Initializing Anthropic model with Cloudflare check");
+                const baseURL = getCloudflareGatewayBaseURL(runtime, 'anthropic') || "https://api.anthropic.com/v1";
                 elizaLogger.debug("Anthropic baseURL result:", { baseURL });
 
-                const anthropic = createAnthropic({
-                    apiKey,
-                    baseURL,
-                    fetch: runtime.fetch,
-                });
+                const anthropic = createAnthropic({ apiKey, baseURL, fetch: runtime.fetch });
                 const { text: anthropicResponse } = await aiGenerateText({
                     model: anthropic.languageModel(model),
                     prompt: context,
@@ -827,16 +642,10 @@ export async function generateText({
             }
 
             case ModelProviderName.GROQ: {
-                elizaLogger.debug(
-                    "Initializing Groq model with Cloudflare check"
-                );
-                const baseURL = getCloudflareGatewayBaseURL(runtime, "groq");
+                elizaLogger.debug("Initializing Groq model with Cloudflare check");
+                const baseURL = getCloudflareGatewayBaseURL(runtime, 'groq');
                 elizaLogger.debug("Groq baseURL result:", { baseURL });
-                const groq = createGroq({
-                    apiKey,
-                    fetch: runtime.fetch,
-                    baseURL,
-                });
+                const groq = createGroq({ apiKey, fetch: runtime.fetch, baseURL });
 
                 const { text: groqResponse } = await aiGenerateText({
                     model: groq.languageModel(model),
@@ -972,10 +781,7 @@ export async function generateText({
                         experimental_telemetry: experimental_telemetry,
                     });
 
-                    response = ollamaResponse.replace(
-                        /<think>[\s\S]*?<\/think>\s*\n*/g,
-                        ""
-                    );
+                    response = ollamaResponse;
                 }
                 elizaLogger.debug("Received response from Ollama model.");
                 break;
@@ -1061,36 +867,6 @@ export async function generateText({
 
                 response = openaiResponse;
                 elizaLogger.debug("Received response from GAIANET model.");
-                break;
-            }
-
-            case ModelProviderName.ATOMA: {
-                elizaLogger.debug("Initializing Atoma model.");
-                const atoma = createOpenAI({
-                    apiKey,
-                    baseURL: endpoint,
-                    fetch: runtime.fetch,
-                });
-
-                const { text: atomaResponse } = await aiGenerateText({
-                    model: atoma.languageModel(model),
-                    prompt: context,
-                    system:
-                        runtime.character.system ??
-                        settings.SYSTEM_PROMPT ??
-                        undefined,
-                    tools: tools,
-                    onStepFinish: onStepFinish,
-                    maxSteps: maxSteps,
-                    temperature: temperature,
-                    maxTokens: max_response_length,
-                    frequencyPenalty: frequency_penalty,
-                    presencePenalty: presence_penalty,
-                    experimental_telemetry: experimental_telemetry,
-                });
-
-                response = atomaResponse;
-                elizaLogger.debug("Received response from Atoma model.");
                 break;
             }
 
@@ -1184,43 +960,8 @@ export async function generateText({
                     maxTokens: max_response_length,
                 });
 
-                // console.warn("veniceResponse:")
-                // console.warn(veniceResponse)
-                //rferrari: remove all text from <think> to </think>\n\n
-                response = veniceResponse.replace(
-                    /<think>[\s\S]*?<\/think>\s*\n*/g,
-                    ""
-                );
-                // console.warn(response)
-
-                // response = veniceResponse;
+                response = veniceResponse;
                 elizaLogger.debug("Received response from Venice model.");
-                break;
-            }
-
-            case ModelProviderName.NVIDIA: {
-                elizaLogger.debug("Initializing NVIDIA model.");
-                const nvidia = createOpenAI({
-                    apiKey: apiKey,
-                    baseURL: endpoint,
-                });
-
-                const { text: nvidiaResponse } = await aiGenerateText({
-                    model: nvidia.languageModel(model),
-                    prompt: context,
-                    system:
-                        runtime.character.system ??
-                        settings.SYSTEM_PROMPT ??
-                        undefined,
-                    tools: tools,
-                    onStepFinish: onStepFinish,
-                    temperature: temperature,
-                    maxSteps: maxSteps,
-                    maxTokens: max_response_length,
-                });
-
-                response = nvidiaResponse;
-                elizaLogger.debug("Received response from NVIDIA model.");
                 break;
             }
 
@@ -1252,112 +993,6 @@ export async function generateText({
 
                 response = deepseekResponse;
                 elizaLogger.debug("Received response from Deepseek model.");
-                break;
-            }
-
-            case ModelProviderName.LIVEPEER: {
-                elizaLogger.debug("Initializing Livepeer model.");
-
-                if (!endpoint) {
-                    throw new Error("Livepeer Gateway URL is not defined");
-                }
-
-                const requestBody = {
-                    model: model,
-                    messages: [
-                        {
-                            role: "system",
-                            content:
-                                runtime.character.system ??
-                                settings.SYSTEM_PROMPT ??
-                                "You are a helpful assistant",
-                        },
-                        {
-                            role: "user",
-                            content: context,
-                        },
-                    ],
-                    max_tokens: max_response_length,
-                    stream: false,
-                };
-
-                const fetchResponse = await runtime.fetch(endpoint + "/llm", {
-                    method: "POST",
-                    headers: {
-                        accept: "text/event-stream",
-                        "Content-Type": "application/json",
-                        Authorization: "Bearer eliza-app-llm",
-                    },
-                    body: JSON.stringify(requestBody),
-                });
-
-                if (!fetchResponse.ok) {
-                    const errorText = await fetchResponse.text();
-                    throw new Error(
-                        `Livepeer request failed (${fetchResponse.status}): ${errorText}`
-                    );
-                }
-
-                const json = await fetchResponse.json();
-
-                if (!json?.choices?.[0]?.message?.content) {
-                    throw new Error("Invalid response format from Livepeer");
-                }
-
-                response = json.choices[0].message.content.replace(
-                    /<\|start_header_id\|>assistant<\|end_header_id\|>\n\n/,
-                    ""
-                );
-                elizaLogger.debug(
-                    "Successfully received response from Livepeer model"
-                );
-                break;
-            }
-
-            case ModelProviderName.SECRETAI:
-                {
-                    elizaLogger.debug("Initializing SecretAI model.");
-
-                    const secretAiProvider = createOllama({
-                        baseURL: getEndpoint(provider) + "/api",
-                        fetch: runtime.fetch,
-                        headers: {
-                            "Content-Type": "application/json",
-                            Authorization: `Bearer ${apiKey}`,
-                        },
-                    });
-                    const secretAi = secretAiProvider(model);
-
-                    const { text: secretAiResponse } = await aiGenerateText({
-                        model: secretAi,
-                        prompt: context,
-                        tools: tools,
-                        onStepFinish: onStepFinish,
-                        temperature: temperature,
-                        maxSteps: maxSteps,
-                        maxTokens: max_response_length,
-                    });
-
-                    response = secretAiResponse;
-                }
-                break;
-
-            case ModelProviderName.BEDROCK: {
-                elizaLogger.debug("Initializing Bedrock model.");
-
-                const { text: bedrockResponse } = await aiGenerateText({
-                    model: bedrock(model),
-                    maxSteps: maxSteps,
-                    temperature: temperature,
-                    maxTokens: max_response_length,
-                    frequencyPenalty: frequency_penalty,
-                    presencePenalty: presence_penalty,
-                    experimental_telemetry: experimental_telemetry,
-                    prompt: context,
-                });
-
-                response = bedrockResponse;
-                elizaLogger.debug("Received response from Bedrock model.");
                 break;
             }
 
@@ -1446,63 +1081,15 @@ export async function generateShouldRespond({
  */
 export async function splitChunks(
     content: string,
-    chunkSize = 1500,
-    bleed = 100
+    chunkSize: number = 512,
+    bleed: number = 20
 ): Promise<string[]> {
-    elizaLogger.debug(`[splitChunks] Starting text split`);
-
-    // Validate parameters
-    if (chunkSize <= 0) {
-        elizaLogger.warn(
-            `Invalid chunkSize (${chunkSize}), using default 1500`
-        );
-        chunkSize = 1500;
-    }
-
-    if (bleed >= chunkSize) {
-        elizaLogger.warn(
-            `Bleed (${bleed}) >= chunkSize (${chunkSize}), adjusting bleed to 1/4 of chunkSize`
-        );
-        bleed = Math.floor(chunkSize / 4);
-    }
-
-    if (bleed < 0) {
-        elizaLogger.warn(`Invalid bleed (${bleed}), using default 100`);
-        bleed = 100;
-    }
-
-    const chunks = splitText(content, chunkSize, bleed);
-
-    elizaLogger.debug(`[splitChunks] Split complete:`, {
-        numberOfChunks: chunks.length,
-        averageChunkSize:
-            chunks.reduce((acc, chunk) => acc + chunk.length, 0) /
-            chunks.length,
+    const textSplitter = new RecursiveCharacterTextSplitter({
+        chunkSize: Number(chunkSize),
+        chunkOverlap: Number(bleed),
     });
 
-    return chunks;
-}
-
-export function splitText(
-    content: string,
-    chunkSize: number,
-    bleed: number
-): string[] {
-    const chunks: string[] = [];
-    let start = 0;
-
-    while (start < content.length) {
-        const end = Math.min(start + chunkSize, content.length);
-        // Ensure we're not creating empty or invalid chunks
-        if (end > start) {
-            chunks.push(content.substring(start, end));
-        }
-
-        // Ensure forward progress while preventing infinite loops
-        start = Math.max(end - bleed, start + 1);
-    }
-
-    return chunks;
+    return textSplitter.splitText(content);
 }
 
 /**
@@ -1515,6 +1102,7 @@ export function splitText(
  * @param opts.presence_penalty The presence penalty to apply (0.0 to 2.0)
  * @param opts.temperature The temperature to control randomness (0.0 to 2.0)
  * @param opts.serverUrl The URL of the API server
+ * @param opts.token The API token for authentication
  * @param opts.max_context_length Maximum allowed context length in tokens
  * @param opts.max_response_length Maximum allowed response length in tokens
  * @returns Promise resolving to a boolean value parsed from the model's response
@@ -1748,8 +1336,6 @@ export const generateImage = async (
         jobId?: string;
         stylePreset?: string;
         hideWatermark?: boolean;
-        safeMode?: boolean;
-        cfgScale?: number;
     },
     runtime: IAgentRuntime
 ): Promise<{
@@ -1758,12 +1344,6 @@ export const generateImage = async (
     error?: any;
 }> => {
     const modelSettings = getImageModelSettings(runtime.imageModelProvider);
-    if (!modelSettings) {
-        elizaLogger.warn(
-            "No model settings found for the image model provider."
-        );
-        return { success: false, error: "No model settings available" };
-    }
     const model = modelSettings.name;
     elizaLogger.info("Generating image with options:", {
         imageModelProvider: model,
@@ -1787,27 +1367,6 @@ export const generateImage = async (
                           return runtime.getSetting("VENICE_API_KEY");
                       case ModelProviderName.LIVEPEER:
                           return runtime.getSetting("LIVEPEER_GATEWAY_URL");
-                      case ModelProviderName.SECRETAI:
-                          return runtime.getSetting("SECRET_AI_API_KEY");
-                      case ModelProviderName.NEARAI:
-                          try {
-                              // Read auth config from ~/.nearai/config.json if it exists
-                              const config = JSON.parse(
-                                  fs.readFileSync(
-                                      path.join(
-                                          os.homedir(),
-                                          ".nearai/config.json"
-                                      ),
-                                      "utf8"
-                                  )
-                              );
-                              return JSON.stringify(config?.auth);
-                          } catch (e) {
-                              elizaLogger.warn(
-                                  `Error loading NEAR AI config. The environment variable NEARAI_API_KEY will be used. ${e}`
-                              );
-                          }
-                          return runtime.getSetting("NEARAI_API_KEY");
                       default:
                           // If no specific match, try the fallback chain
                           return (
@@ -1959,6 +1518,7 @@ export const generateImage = async (
                     }
                 },
             });
+
             // Convert the returned image URLs to base64 to match existing functionality
             const base64Promises = result.data.images.map(async (image) => {
                 const response = await fetch(image.url);
@@ -1982,12 +1542,10 @@ export const generateImage = async (
                     body: JSON.stringify({
                         model: model,
                         prompt: data.prompt,
-                        cfg_scale: data.guidanceScale,
                         negative_prompt: data.negativePrompt,
                         width: data.width,
                         height: data.height,
                         steps: data.numIterations,
-                        safe_mode: data.safeMode,
                         seed: data.seed,
                         style_preset: data.stylePreset,
                         hide_watermark: data.hideWatermark,
@@ -2059,18 +1617,15 @@ export const generateImage = async (
                 if (!baseUrl.protocol.startsWith("http")) {
                     throw new Error("Invalid Livepeer Gateway URL protocol");
                 }
-
                 const response = await fetch(
                     `${baseUrl.toString()}text-to-image`,
                     {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
-                            Authorization: "Bearer eliza-app-img",
                         },
                         body: JSON.stringify({
-                            model_id:
-                                data.modelId || "ByteDance/SDXL-Lightning",
+                            model_id: model,
                             prompt: data.prompt,
                             width: data.width || 1024,
                             height: data.height || 1024,
@@ -2169,6 +1724,28 @@ export const generateCaption = async (
     };
 };
 
+export const generateWebSearch = async (
+    query: string,
+    runtime: IAgentRuntime
+): Promise<SearchResponse> => {
+    try {
+        const apiKey = runtime.getSetting("TAVILY_API_KEY") as string;
+        if (!apiKey) {
+            throw new Error("TAVILY_API_KEY is not set");
+        }
+        const tvly = tavily({ apiKey });
+        const response = await tvly.search(query, {
+            includeAnswer: true,
+            maxResults: 3, // 5 (default)
+            topic: "general", // "general"(default) "news"
+            searchDepth: "basic", // "basic"(default) "advanced"
+            includeImages: false, // false (default) true
+        });
+        return response;
+    } catch (error) {
+        elizaLogger.error("Error:", error);
+    }
+};
 /**
  * Configuration options for generating objects with a model.
  */
@@ -2182,9 +1759,9 @@ export interface GenerationOptions {
     stop?: string[];
     mode?: "auto" | "json" | "tool";
     experimental_providerMetadata?: Record<string, unknown>;
-    // verifiableInference?: boolean;
-    // verifiableInferenceAdapter?: IVerifiableInferenceAdapter;
-    // verifiableInferenceOptions?: VerifiableInferenceOptions;
+    verifiableInference?: boolean;
+    verifiableInferenceAdapter?: IVerifiableInferenceAdapter;
+    verifiableInferenceOptions?: VerifiableInferenceOptions;
 }
 
 /**
@@ -2216,10 +1793,10 @@ export const generateObject = async ({
     schemaDescription,
     stop,
     mode = "json",
-}: // verifiableInference = false,
-// verifiableInferenceAdapter,
-// verifiableInferenceOptions,
-GenerationOptions): Promise<GenerateObjectResult<unknown>> => {
+    verifiableInference = false,
+    verifiableInferenceAdapter,
+    verifiableInferenceOptions,
+}: GenerationOptions): Promise<GenerateObjectResult<unknown>> => {
     if (!context) {
         const errorMessage = "generateObject context is empty";
         console.error(errorMessage);
@@ -2262,9 +1839,9 @@ GenerationOptions): Promise<GenerateObjectResult<unknown>> => {
             runtime,
             context,
             modelClass,
-            // verifiableInference,
-            // verifiableInferenceAdapter,
-            // verifiableInferenceOptions,
+            verifiableInference,
+            verifiableInferenceAdapter,
+            verifiableInferenceOptions,
         });
 
         return response;
@@ -2275,6 +1852,27 @@ GenerationOptions): Promise<GenerateObjectResult<unknown>> => {
 };
 
 /**
+ * Interface for provider-specific generation options.
+ */
+interface ProviderOptions {
+    runtime: IAgentRuntime;
+    provider: ModelProviderName;
+    model: any;
+    apiKey: string;
+    schema?: ZodSchema;
+    schemaName?: string;
+    schemaDescription?: string;
+    mode?: "auto" | "json" | "tool";
+    experimental_providerMetadata?: Record<string, unknown>;
+    modelOptions: ModelSettings;
+    modelClass: ModelClass;
+    context: string;
+    verifiableInference?: boolean;
+    verifiableInferenceAdapter?: IVerifiableInferenceAdapter;
+    verifiableInferenceOptions?: VerifiableInferenceOptions;
+}
+
+/**
  * Handles AI generation based on the specified provider.
  *
  * @param {ProviderOptions} options - Configuration options specific to the provider.
@@ -2282,7 +1880,7 @@ GenerationOptions): Promise<GenerateObjectResult<unknown>> => {
  */
 export async function handleProvider(
     options: ProviderOptions
-): Promise<GenerationResult> {
+): Promise<GenerateObjectResult<unknown>> {
     const {
         provider,
         runtime,
@@ -2301,7 +1899,6 @@ export async function handleProvider(
         case ModelProviderName.TOGETHER:
         case ModelProviderName.NANOGPT:
         case ModelProviderName.AKASH_CHAT_API:
-        case ModelProviderName.LMSTUDIO:
             return await handleOpenAI(options);
         case ModelProviderName.ANTHROPIC:
         case ModelProviderName.CLAUDE_VERTEX:
@@ -2328,14 +1925,6 @@ export async function handleProvider(
             return await handleOllama(options);
         case ModelProviderName.DEEPSEEK:
             return await handleDeepSeek(options);
-        case ModelProviderName.LIVEPEER:
-            return await handleLivepeer(options);
-        case ModelProviderName.SECRETAI:
-            return await handleSecretAi(options);
-        case ModelProviderName.NEARAI:
-            return await handleNearAi(options);
-        case ModelProviderName.BEDROCK:
-            return await handleBedrock(options);
         default: {
             const errorMessage = `Unsupported provider: ${provider}`;
             elizaLogger.error(errorMessage);
@@ -2357,17 +1946,12 @@ async function handleOpenAI({
     schemaDescription,
     mode = "json",
     modelOptions,
-    provider,
+    provider: _provider,
     runtime,
 }: ProviderOptions): Promise<GenerateObjectResult<unknown>> {
-    const endpoint = runtime.character.modelEndpointOverride || getEndpoint(provider);
-    const baseURL = getCloudflareGatewayBaseURL(runtime, "openai") || endpoint;
-    const openai = createOpenAI({ 
-        apiKey, 
-        baseURL,
-        fetch: runtime.fetch 
-    });
-    return aiGenerateObject({
+    const baseURL = getCloudflareGatewayBaseURL(runtime, 'openai') || models.openai.endpoint;
+    const openai = createOpenAI({ apiKey, baseURL });
+    return await aiGenerateObject({
         model: openai.languageModel(model),
         schema,
         schemaName,
@@ -2389,23 +1973,15 @@ async function handleAnthropic({
     schema,
     schemaName,
     schemaDescription,
-    mode = "auto",
+    mode = "json",
     modelOptions,
     runtime,
-}: ProviderOptions): Promise<GenerationResult> {
+}: ProviderOptions): Promise<GenerateObjectResult<unknown>> {
     elizaLogger.debug("Handling Anthropic request with Cloudflare check");
-    if (mode === "json") {
-        elizaLogger.warn("Anthropic mode is set to json, changing to auto");
-        mode = "auto";
-    }
-    const baseURL = getCloudflareGatewayBaseURL(runtime, "anthropic");
+    const baseURL = getCloudflareGatewayBaseURL(runtime, 'anthropic');
     elizaLogger.debug("Anthropic handleAnthropic baseURL:", { baseURL });
 
-    const anthropic = createAnthropic({ 
-        apiKey, 
-        baseURL,
-        fetch: runtime.fetch 
-    });
+    const anthropic = createAnthropic({ apiKey, baseURL });
     return await aiGenerateObject({
         model: anthropic.languageModel(model),
         schema,
@@ -2430,14 +2006,9 @@ async function handleGrok({
     schemaDescription,
     mode = "json",
     modelOptions,
-    runtime,
-}: ProviderOptions): Promise<GenerationResult> {
-    const grok = createOpenAI({ 
-        apiKey, 
-        baseURL: models.grok.endpoint,
-        fetch: runtime.fetch 
-    });
-    return aiGenerateObject({
+}: ProviderOptions): Promise<GenerateObjectResult<unknown>> {
+    const grok = createOpenAI({ apiKey, baseURL: models.grok.endpoint });
+    return await aiGenerateObject({
         model: grok.languageModel(model, { parallelToolCalls: false }),
         schema,
         schemaName,
@@ -2462,16 +2033,12 @@ async function handleGroq({
     mode = "json",
     modelOptions,
     runtime,
-}: ProviderOptions): Promise<GenerationResult> {
+}: ProviderOptions): Promise<GenerateObjectResult<unknown>> {
     elizaLogger.debug("Handling Groq request with Cloudflare check");
-    const baseURL = getCloudflareGatewayBaseURL(runtime, "groq");
+    const baseURL = getCloudflareGatewayBaseURL(runtime, 'groq');
     elizaLogger.debug("Groq handleGroq baseURL:", { baseURL });
 
-    const groq = createGroq({ 
-        apiKey, 
-        baseURL,
-        fetch: runtime.fetch 
-    });
+    const groq = createGroq({ apiKey, baseURL });
     return await aiGenerateObject({
         model: groq.languageModel(model),
         schema,
@@ -2490,19 +2057,15 @@ async function handleGroq({
  */
 async function handleGoogle({
     model,
-    apiKey,
+    apiKey: _apiKey,
     schema,
     schemaName,
     schemaDescription,
     mode = "json",
     modelOptions,
-    runtime,
 }: ProviderOptions): Promise<GenerateObjectResult<unknown>> {
-    const google = createGoogleGenerativeAI({
-        apiKey,
-        fetch: runtime.fetch 
-    });
-    return aiGenerateObject({
+    const google = createGoogleGenerativeAI();
+    return await aiGenerateObject({
         model: google(model),
         schema,
         schemaName,
@@ -2525,10 +2088,9 @@ async function handleMistral({
     schemaDescription,
     mode,
     modelOptions,
-    runtime,
-}: ProviderOptions): Promise<GenerationResult> {
-    const mistral = createMistral({ fetch: runtime.fetch });
-    return aiGenerateObject({
+}: ProviderOptions): Promise<GenerateObjectResult<unknown>> {
+    const mistral = createMistral();
+    return await aiGenerateObject({
         model: mistral(model),
         schema,
         schemaName,
@@ -2552,14 +2114,9 @@ async function handleRedPill({
     schemaDescription,
     mode = "json",
     modelOptions,
-    runtime,
-}: ProviderOptions): Promise<GenerationResult> {
-    const redPill = createOpenAI({ 
-        apiKey, 
-        baseURL: models.redpill.endpoint,
-        fetch: runtime.fetch 
-    });
-    return aiGenerateObject({
+}: ProviderOptions): Promise<GenerateObjectResult<unknown>> {
+    const redPill = createOpenAI({ apiKey, baseURL: models.redpill.endpoint });
+    return await aiGenerateObject({
         model: redPill.languageModel(model),
         schema,
         schemaName,
@@ -2583,14 +2140,12 @@ async function handleOpenRouter({
     schemaDescription,
     mode = "json",
     modelOptions,
-    runtime,
-}: ProviderOptions): Promise<GenerationResult> {
+}: ProviderOptions): Promise<GenerateObjectResult<unknown>> {
     const openRouter = createOpenAI({
         apiKey,
         baseURL: models.openrouter.endpoint,
-        fetch: runtime.fetch
     });
-    return aiGenerateObject({
+    return await aiGenerateObject({
         model: openRouter.languageModel(model),
         schema,
         schemaName,
@@ -2614,14 +2169,12 @@ async function handleOllama({
     mode = "json",
     modelOptions,
     provider,
-    runtime,
-}: ProviderOptions): Promise<GenerationResult> {
+}: ProviderOptions): Promise<GenerateObjectResult<unknown>> {
     const ollamaProvider = createOllama({
         baseURL: getEndpoint(provider) + "/api",
-        fetch: runtime.fetch
     });
     const ollama = ollamaProvider(model);
-    return aiGenerateObject({
+    return await aiGenerateObject({
         model: ollama,
         schema,
         schemaName,
@@ -2645,142 +2198,10 @@ async function handleDeepSeek({
     schemaDescription,
     mode,
     modelOptions,
-    runtime,
-}: ProviderOptions): Promise<GenerationResult> {
-    const openai = createOpenAI({ 
-        apiKey, 
-        baseURL: models.deepseek.endpoint,
-        fetch: runtime.fetch 
-    });
-    return aiGenerateObject({
+}: ProviderOptions): Promise<GenerateObjectResult<unknown>> {
+    const openai = createOpenAI({ apiKey, baseURL: models.deepseek.endpoint });
+    return await aiGenerateObject({
         model: openai.languageModel(model),
-        schema,
-        schemaName,
-        schemaDescription,
-        mode,
-        ...modelOptions,
-    });
-}
-
-/**
- * Handles object generation for Amazon Bedrock models.
- *
- * @param {ProviderOptions} options - Options specific to Amazon Bedrock.
- * @returns {Promise<GenerateObjectResult<unknown>>} - A promise that resolves to generated objects.
- */
-async function handleBedrock({
-    model,
-    schema,
-    schemaName,
-    schemaDescription,
-    mode,
-    modelOptions,
-    provider,
-    runtime,
-}: ProviderOptions): Promise<GenerationResult> {
-    const bedrockClient = bedrock(model);
-    return aiGenerateObject({
-        model: bedrockClient,
-        schema,
-        schemaName,
-        schemaDescription,
-        mode,
-        ...modelOptions,
-    });
-}
-
-async function handleLivepeer({
-    model,
-    apiKey,
-    schema,
-    schemaName,
-    schemaDescription,
-    mode,
-    modelOptions,
-    runtime,
-}: ProviderOptions): Promise<GenerationResult> {
-    console.log("Livepeer provider api key:", apiKey);
-    if (!apiKey) {
-        throw new Error(
-            "Livepeer provider requires LIVEPEER_GATEWAY_URL to be configured"
-        );
-    }
-
-    const livepeerClient = createOpenAI({
-        apiKey,
-        baseURL: apiKey,
-        fetch: runtime.fetch
-    });
-    return aiGenerateObject({
-        model: livepeerClient.languageModel(model),
-        schema,
-        schemaName,
-        schemaDescription,
-        mode,
-        ...modelOptions,
-    });
-}
-
-/**
- * Handles object generation for Secret AI models.
- *
- * @param {ProviderOptions} options - Options specific to Secret AI.
- * @returns {Promise<GenerateObjectResult<unknown>>} - A promise that resolves to generated objects.
- */
-async function handleSecretAi({
-    model,
-    apiKey,
-    schema,
-    schemaName,
-    schemaDescription,
-    mode = "json",
-    modelOptions,
-    provider,
-    runtime,
-}: ProviderOptions): Promise<GenerationResult> {
-    const secretAiProvider = createOllama({
-        baseURL: getEndpoint(provider) + "/api",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-        },
-        fetch: runtime.fetch
-    });
-    const secretAi = secretAiProvider(model);
-    return aiGenerateObject({
-        model: secretAi,
-        schema,
-        schemaName,
-        schemaDescription,
-        mode,
-        ...modelOptions,
-    });
-}
-
-/**
- * Handles object generation for NEAR AI models.
- *
- * @param {ProviderOptions} options - Options specific to NEAR AI.
- * @returns {Promise<GenerateObjectResult<unknown>>} - A promise that resolves to generated objects.
- */
-async function handleNearAi({
-    model,
-    apiKey,
-    schema,
-    schemaName,
-    schemaDescription,
-    mode = "json",
-    modelOptions,
-    runtime,
-}: ProviderOptions): Promise<GenerationResult> {
-    const nearai = createOpenAI({ 
-        apiKey, 
-        baseURL: models.nearai.endpoint,
-        fetch: runtime.fetch 
-    });
-    const settings = schema ? { structuredOutputs: true } : undefined;
-    return aiGenerateObject({
-        model: nearai.languageModel(model, settings),
         schema,
         schemaName,
         schemaDescription,
@@ -2798,7 +2219,6 @@ interface TogetherAIImageResponse {
     }>;
 }
 
-// doesn't belong here
 export async function generateTweetActions({
     runtime,
     context,
@@ -2816,13 +2236,13 @@ export async function generateTweetActions({
                 context,
                 modelClass,
             });
-            elizaLogger.debug(
+            console.debug(
                 "Received response from generateText for tweet actions:",
                 response
             );
             const { actions } = parseActionResponseFromText(response.trim());
             if (actions) {
-                elizaLogger.debug("Parsed tweet actions:", actions);
+                console.debug("Parsed tweet actions:", actions);
                 return actions;
             } else {
                 elizaLogger.debug("generateTweetActions no valid response");

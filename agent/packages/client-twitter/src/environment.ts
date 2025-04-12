@@ -1,6 +1,6 @@
 import {
     parseBooleanFromText,
-    type IAgentRuntime,
+    IAgentRuntime,
     ActionTimelineType,
 } from "@elizaos/core";
 import { z, ZodError } from "zod";
@@ -65,7 +65,6 @@ export const twitterEnvSchema = z.object({
         .optional()
         .default(''),
     */
-    ENABLE_TWITTER_POST_GENERATION: z.boolean(),
     POST_INTERVAL_MIN: z.number().int(),
     POST_INTERVAL_MAX: z.number().int(),
     ENABLE_ACTION_PROCESSING: z.boolean(),
@@ -99,7 +98,7 @@ function safeParseInt(
     defaultValue: number
 ): number {
     if (!value) return defaultValue;
-    const parsed = Number.parseInt(value, 10);
+    const parsed = parseInt(value, 10);
     return isNaN(parsed) ? defaultValue : Math.max(1, parsed);
 }
 
@@ -173,14 +172,6 @@ export async function validateTwitterConfig(
                 runtime.getSetting("TWITTER_TARGET_USERS") ||
                     process.env.TWITTER_TARGET_USERS
             ),
-
-            // bool
-            ENABLE_TWITTER_POST_GENERATION:
-                parseBooleanFromText(
-                    runtime.getSetting("ENABLE_TWITTER_POST_GENERATION") ||
-                        process.env.ENABLE_TWITTER_POST_GENERATION
-                ) ?? true,
-
 
             // int in minutes
             POST_INTERVAL_MIN: safeParseInt(
