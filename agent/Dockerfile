@@ -1,39 +1,70 @@
-# Use a specific Node.js version for better reproducibility
+# ----------------------------
+# Stage 1: Build
+# ----------------------------
 FROM node:23.3.0-slim AS builder
 
-# Install pnpm globally and install necessary build tools
-RUN npm install -g pnpm@9.4.0 && \
+# Install pnpm globally and necessary build tools
+RUN npm install -g pnpm@9.15.4 && \
     apt-get update && \
-    apt-get install -y git python3 make g++ && \
+    apt-get upgrade -y && \
+    apt-get install -y \
+    git \
+    python3 \
+    python3-pip \
+    curl \
+    node-gyp \
+    ffmpeg \
+    libtool-bin \
+    autoconf \
+    automake \
+    libopus-dev \
+    make \
+    g++ \
+    build-essential \
+    libcairo2-dev \
+    libjpeg-dev \
+    libpango1.0-dev \
+    libgif-dev \
+    openssl \
+    libssl-dev libsecret-1-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Set Python 3 as the default python
+# Make python3 the default
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
-# Copy package.json and other configuration files
+# Ensure empty-module directory and index.js exist for pnpm override
+# RUN mkdir -p empty-module && touch empty-module/index.js
+
+# Copy config files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
 
-# Copy the rest of the application code
+# Copy source
 COPY agent ./agent
 COPY packages ./packages
 COPY scripts ./scripts
+# COPY empty-module ./empty-module
 
-# Install dependencies and build the project
-RUN pnpm install \
+# Install dependencies and build
+RUN pnpm install --no-frozen-lockfile \
     && pnpm build-docker \
     && pnpm prune --prod
 
-# Create a new stage for the final image
+# ----------------------------
+# Stage 2: Final Image
+# ----------------------------
 FROM node:23.3.0-slim
 
-# Install runtime dependencies if needed
-RUN npm install -g pnpm@9.4.0 && \
+# Install runtime dependencies
+RUN npm install -g pnpm@9.15.4 && \
     apt-get update && \
-    apt-get install -y git python3 && \
+    apt-get install -y \
+    git \
+    python3 \
+    ffmpeg && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -48,10 +79,11 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/agent ./agent
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/scripts ./scripts
+# COPY --from=builder /app/empty-module ./empty-module
 
-# Note: The .env file is not copied in.
-# It is assumed that docker-compose.yaml will supply the environment
-# variables at runtime via the env_file directive.
+# HEALTHCHECK to confirm container readiness (checks that port 3000 returns 200 OK)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/ || exit 1
 
-# Set the command to run the application
+# Default command to start your app
 CMD ["pnpm", "start"]
