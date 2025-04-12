@@ -12,13 +12,12 @@ services:
       - tee:/app/packages/client-twitter/src/tweetcache
       - tee:/app/db.sqlite
     env_file:
-      - .env # Explicitly load environment variables from the .env file
+      - .env  # The runtime .env file on the host
     ports:
       - "3000:3000"
     restart: always
     environment:
-      # Explicitly override sensitive keys if needed
-      TWITTER_DRY_RUN=false
+      TWITTER_DRY_RUN: "false"  # You can override specific variables here if needed
 
 volumes:
-  tee:
+  tee: {}

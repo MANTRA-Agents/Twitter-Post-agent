@@ -21,7 +21,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
 COPY agent ./agent
 COPY packages ./packages
 COPY scripts ./scripts
-COPY .env /app/.env
 
 # Install dependencies and build the project
 RUN pnpm install \
@@ -49,7 +48,10 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/agent ./agent
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/.env .env
+
+# Note: The .env file is not copied in.
+# It is assumed that docker-compose.yaml will supply the environment
+# variables at runtime via the env_file directive.
 
 # Set the command to run the application
 CMD ["pnpm", "start"]
