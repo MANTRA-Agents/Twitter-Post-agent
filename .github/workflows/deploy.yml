@@ -60,7 +60,7 @@ jobs:
             git pull origin main
 
             # 2) Remove cache if necessary
-            cd agent/packages/core
+            cd agent-new/packages/core
             rm -rf cache
 
             # 3) Return to the folder with docker-compose.yaml
