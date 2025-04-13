@@ -4,6 +4,29 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'README*'
+      - 'CHANGELOG*.md'
+      - 'LICENSE*'
+      - 'docs/**'
+      - '.vscode/**'
+      - '.idea/**'
+      - '.editorconfig'
+      - '**/test/**'
+      - '**/__tests__/**'
+      - '**/*.spec.*'
+      - '**/*.test.*'
+      - '.eslint*'
+      - '.prettier*'
+      - '.circleci/**'
+      - '.travis.yml'
+      - 'Jenkinsfile'
+      - '.gitattributes'
+      - '.env.example'
+      - 'dist/**'
+      - 'build/**'
+      - 'coverage/**'
+      - '*.log'      
   workflow_dispatch:  # Allows manual triggering as well
 
 jobs:
@@ -37,7 +60,7 @@ jobs:
             git pull origin main
 
             # 2) Remove cache if necessary
-            cd agent/packages/core
+            cd agent-new/packages/core
             rm -rf cache
 
             # 3) Return to the folder with docker-compose.yaml
